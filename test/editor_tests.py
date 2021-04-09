@@ -41,9 +41,8 @@ class TestEditor(unittest.TestCase):
                 self.file_data[offset:count + offset],
                 list(self.editor.read_nbytes(count, offset)))
         else:
-            self.assertSequenceEqual(
-                self.file_data[:count],
-                list(self.editor.read_nbytes(count)))
+            self.assertSequenceEqual(self.file_data[:count],
+                					 list(self.editor.read_nbytes(count)))
 
 
 if __name__ == '__main__':
