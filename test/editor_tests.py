@@ -10,7 +10,11 @@ from hex_editor.editor import HexEditor
 
 class TestEditor(unittest.TestCase):
 	def setUp(self):
-		self.editor = HexEditor()
+		self.editor = HexEditor('simple_file.txt')
+
+	def test_hex_view(self):
+		self.assertEqual('41 41 41 41 42 42 42 42 43 43 43 43', 
+						 self.editor.get_hex_view())
 
 
 if __name__ == '__main__':
