@@ -1,5 +1,9 @@
 import unittest
-import hex_editor as t
+import os
+
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             os.path.pardir))
 
 
 class TestEditor(unittest.TestCase):
