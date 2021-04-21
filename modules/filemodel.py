@@ -1,49 +1,39 @@
-from functools import total_ordering
 import bisect
+from functools import total_ordering
 
-
-class FileModel:
-	def __init__(self):
-		pass
-
-	def search_regions(self, count: int, offset: int):
-		region_index = bisect.bisect_left(self._regions, offset)
-
-		result = []
-		if region_index != -1:
-			while self._regions[region_index] <= offset + count:
-				print('here')
-				result.append(self._regions[region_index])
-				region_index += 1
-
-		return result
 
 @total_ordering
 class FileRegion:
-	def __init__(self, start, end):
-		self.start = start
-		self.end = end
+    def __init__(self, start, end, index, is_inserted=False):
+        self.start = start
+        self.end = end
+        self.index = index
+        self.is_inserted = is_inserted
 
-	def __eq__(self, other):
-		if isinstance(other, int):
-			return self.start <= other <= self.end
+    def __eq__(self, other):
+        if isinstance(other, int):
+            return self.start <= other <= self.end
 
-		if isinstance(other, FileRegion):
-			pass
+    def __gt__(self, other):
+        if isinstance(other, int):
+            return self.start > other
 
-	def __gt__(self, other):
-		if isinstance(other, int):
-			return self.start > other
+    def __lt__(self, other):
+        if isinstance(other, int):
+            return self.end < other
 
-		if isinstance(other, FileRegion):
-			pass
+    def __repr__(self):
+        return f'FileRegion({self.start}, {self.end})'
 
-	def __lt__(self, other):
-		if isinstance(other, int):
-			return self.end < other
 
-		if isinstance(other, FileRegion):
-			pass
+class FileModel:
+    def __init__(self, file_size: int):
+        self.size = file_size
+        self.file_regions = [FileRegion(0, self.size - 1, 0)]
 
-	def __repr__(self):
-		return f'FileRegion({self.start}, {self.end})'
+    def search_region(self, offset: int) -> FileRegion:
+        return bisect.bisect_left(self.file_regions, offset)
+
+
+# TODO
+# 1. linked list?
