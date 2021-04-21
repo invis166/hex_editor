@@ -1,39 +1,41 @@
 from collections import deque
 
+from buffer import DataBuffer
+from fileregion import FileRegion
+
 
 class HexEditor:
 	def __init__(self, filename: str):
-		self.fp = open(filename, 'r+b')
-		self.chunk_size = 1024
+		self._fp = open(filename, 'r+b')
+		self._buffer = DataBuffer()
+		self._regions = []
 
-		self._changes = deque
-		self._buffer = []
+	def get_nbytes(self):
+		pass
 
-	def read_nbytes(self, count: int, offset: int=None):
-		if offset != None:
-			self.fp.seek(offset)
+	def replace_bytes(self):
+		pass
 
-		while data := self.fp.read(chunk := min(self.chunk_size, count)):
-			yield from data
-			count -= chunk
+	def insert_bytes(self):
+		pass
 
-	def read_bytes(self, start: int, end: int):
-		return self.read_nbytes(end - start, start)
+	def remove_bytes(self):
+		pass
 
-	def get_hex_view(self):
-		return ' '.join(map(lambda x: hex(x)[2:], 
-			            self.read_nbytes(self.chunk_size)))
-
-	def replace(self, start: int, data: bytes):
-		fp.seek(start)
-
-	def insert(self):
+	def save_changes(self):
 		pass
 
 	def __del__(self):
 		self.fp.close()
 
 
-
 if __name__ == '__main__':
 	pass
+
+
+'''
+Не уверен, где должен быть буффер, у редактора или у графической составляющей.
+Все действия редактирования должны быть делегированы в FileModel.
+Если делегировать все редактирование FileModel, то какие фукнции остаются у 
+сущности HexEditor и нужна ли она вообще?
+'''
