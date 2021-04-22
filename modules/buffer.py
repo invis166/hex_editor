@@ -1,60 +1,58 @@
-from fileregion import FileRegion
+from modules.filemodel import FileRegion, EditedFileRegion, FileModel
 
 
 class DataBuffer:
-    def __init__(self, regions):
+    def __init__(self, file_model: FileModel, fp):
         self._buffer_max_length = 16 * 16 * 4
-        self._buffer: bytes
-        self._regions = regions
-        self._current_regions = []
+        self.buffer = []
 
-        self.offset: int
+        self._file_model: FileModel = file_model
+        self._initial_region: FileRegion = None
+        self._current_region: FileRegion = None
 
-    def read_nbytes(self, count: int, offset: int = None):
-        if offset:
-            self._current_regions = self._search_regions(count, offset)
+        self._fp = fp
 
-    def _search_regions(self, count: int, offset: int):
-        result = -1
+        self.offset: int = 0
 
-        left = 0
-        right = len(self._regions) - 1
+    def read_nbytes(self, offset: int, count: int) -> list:
+        # TODO
+        # нужны какие-то оптимизации, чтобы не считывать все заново в буффер,
+        # если это возможно
+        self.buffer = []
+        self.offset = offset
+        self._initial_region = self._file_model.search_region(offset)
+        self._current_region = self._initial_region
 
-        while left <= right:
-            middle = (left + right) // 2
+        read_total = 0
+        start = offset
+        while read_total < count:  # возможно, read_total есть len(buffer)
+            end = min(offset + count, self._current_region.end)
+            start = max(start, self._current_region.start)
+            if isinstance(self._current_region, EditedFileRegion):
+                # текущий регион был изменен и лежит в памяти
+                self.buffer.append(
+                    self._current_region.get_nbytes(end - start))
+            else:
+                # текущий регион лежит на диске
+                self._fp.seek(start)
+                self.buffer.append(self._fp.read(end - start))
 
-            if self._regions[middle] == offset:
-                result = middle
-                break
-            elif self._regions[middle] > offset:
-                right = middle - 1
-            elif self._regions[middle] < offset:
-                left = middle + 1
+            read_total += end - start
 
-        regions = []
-        if result != -1:
-            # находим все нужные участки
-            while self._regions[result] <= offset + count:
-                print('here')
-                regions.append(self._regions[result])
-                result += 1
+            if self._current_region < offset + count:
+                self._current_region = \
+                    self._file_model[self._current_region.index + 1]
 
-        return regions
+        return self.buffer
+
+    @property
+    def length(self):
+        return len(self.buffer)
+
+    def replace_byte(self):
+        pass
 
 
 if __name__ == '__main__':
-    def convert(regions):
-        result = []
-        for region in regions:
-            result.append(FileRegion(region[0], region[1]))
+    pass
 
-        return result
-
-
-    regions = [(1, 5), (6, 10), (11, 20), (21, 50)]
-    buffer = DataBuffer(convert(regions))
-    print(buffer._search_regions(15, 3))
-'''
-Буффер должен взаимодействовать с FileModel, а не напрямую с файлом, чтобы
-быть в курсеи зменений.
-'''
