@@ -15,6 +15,8 @@ class DataBuffer:
         self.offset: int = 0
 
     def read_nbytes(self, offset: int, count: int) -> list:
+        """Возвращает count байт текущего состояния файла со смещения offset
+        и записывает их в буффер"""
         # TODO
         # нужны какие-то оптимизации, чтобы не считывать все заново в буффер,
         # если это возможно
@@ -24,24 +26,23 @@ class DataBuffer:
         self._current_region = self._initial_region
 
         read_total = 0
-        start = offset
-        while read_total < count:  # возможно, read_total есть len(buffer)
-            end = min(offset + count, self._current_region.end)
-            start = max(start, self._current_region.start)
+        while read_total < count:  # read_total есть len(buffer)
+            to_read = min(self._current_region.length, count - read_total)
+            start = max(0, offset - self._current_region.start)
             if isinstance(self._current_region, EditedFileRegion):
                 # текущий регион был изменен и лежит в памяти
-                self.buffer.append(
-                    self._current_region.get_nbytes(end - start))
+                self.buffer.extend(self._current_region.get_nbytes(start,
+                                                                   to_read))
             else:
                 # текущий регион лежит на диске
                 self._fp.seek(start)
-                self.buffer.append(self._fp.read(end - start))
-
-            read_total += end - start
+                self.buffer.extend(self._fp.read(to_read))
+            read_total += to_read
 
             if self._current_region < offset + count:
+                # идем к следующему региону
                 self._current_region = \
-                    self._file_model[self._current_region.index + 1]
+                    self._file_model.file_regions[self._current_region.index + 1]
 
         return self.buffer
 
