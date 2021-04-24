@@ -1,14 +1,13 @@
-from collections import deque
-
+import os.path
 from buffer import DataBuffer
-from fileregion import FileRegion
+from filemodel import FileModel
 
 
 class HexEditor:
 	def __init__(self, filename: str):
 		self._fp = open(filename, 'r+b')
-		self._buffer = DataBuffer()
-		self._regions = []
+		self._model = FileModel(os.path.getsize(filename))
+		self._buffer = DataBuffer(self._model, self._fp)
 
 	def get_nbytes(self):
 		pass
@@ -31,11 +30,3 @@ class HexEditor:
 
 if __name__ == '__main__':
 	pass
-
-
-'''
-Не уверен, где должен быть буффер, у редактора или у графической составляющей.
-Все действия редактирования должны быть делегированы в FileModel.
-Если делегировать все редактирование FileModel, то какие фукнции остаются у 
-сущности HexEditor и нужна ли она вообще?
-'''
