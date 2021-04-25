@@ -19,6 +19,8 @@ class FileModelTestCase(unittest.TestCase):
         self.model = FileModel(0)
 
     def test_search(self):
+        # TODO
+        # переделать под новый search_region
         self.model.file_regions = convert_tuples_to_regions(
             (0, 5), (6, 10), (11, 17), (18, 30))
 
@@ -34,14 +36,9 @@ class FileModelTestCase(unittest.TestCase):
         self._test_search([(11, 17)], 14)
         self._test_search([(11, 17)], 15)
 
-        self._test_search([(0, 5)], 0)
-        self._test_search([(0, 5)], 0)
-        self._test_search([(0, 5)], 0)
-
-        self._test_search([(0, 5), (6, 10)], 0)
-        self._test_search([(0, 5), (6, 10)], 4)
-        self._test_search([(6, 10), (11, 17), (18, 30)], 10)
-        self._test_search([(0, 5), (6, 10), (11, 17), (18, 30)], 0)
+        self._test_search([(0, 5)], 18)
+        self._test_search([(0, 5)], 19)
+        self._test_search([(0, 5)], 20)
 
     def _test_search(self, expected, offset):
         result = convert_regions_to_tuples(
