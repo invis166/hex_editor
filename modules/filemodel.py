@@ -16,6 +16,8 @@ class FileRegion:
     def __eq__(self, other):
         if isinstance(other, int):
             return self.start <= other <= self.end
+        if isinstance(other, FileRegion):
+            return self.start == other.start and self.end == other.end
 
     def __gt__(self, other):
         if isinstance(other, int):
@@ -51,26 +53,55 @@ class FileModel:
         return self.file_regions[bisect.bisect_left(self.file_regions, offset)]
 
     def replace(self, offset: int, data: list) -> None:
-        # должна быть оптимизация, когда изменяются смежные байты
+        """Заменяет байты со смещения offset на data"""
+        # TODO: должна быть оптимизация, когда изменяются смежные байты
 
-        # находим первый и последний регионы
+        # находим первый и последний регионы, что были задействованы
         first_region = last_region = self.search_region(offset)
         total_bytes = last_region.length
         while total_bytes < len(data):
             last_region = self.file_regions[last_region.index + 1]
             total_bytes += last_region.length
 
-        # меняем хвосты
-        new_region = EditedFileRegion(offset - 1, data, first_region.index + 1)
-        first_region.end = new_region.start - 1
-        last_region.start = new_region.end + 1
+        if offset == first_region.start:
+            new_region_index = first_region.index
+        else:
+            new_region_index = first_region.index + 1
+        new_region = EditedFileRegion(offset, data, new_region_index)
 
-        # вставляем
+        # удаляем регионы, что были перезаписаны
+        to_delete = first_region.index
+        while (new_region.start <= self.file_regions[to_delete].start
+                and new_region.end >= self.file_regions[to_delete].end):
+            self.file_regions.pop(to_delete)
+
         self.file_regions.insert(new_region.index, new_region)
 
-        # переиндексируем
-        map(lambda rg: rg.index + 1, self.file_regions[last_region.index:])
+        if (first_region == last_region
+                and new_region.start == first_region.start):
+            # замена была с начала региона
+            last_region.start = new_region.end + 1
+        elif first_region == last_region and new_region.end == last_region.end:
+            # замена была до конца региона
+            first_region.end = new_region.start - 1
+        elif first_region == last_region:
+            # замена была в середине региона
+            last_region = FileRegion(new_region.end + 1,
+                                     first_region.end,
+                                     new_region_index + 1)
+            self.file_regions.insert(new_region.index + 1, last_region)
+            first_region.end = new_region.start - 1
+            last_region.start = new_region.end + 1
+        else:
+            # замена была больше, чем в одном регионе
+            first_region.end = new_region.start - 1
+            last_region.start = new_region.end + 1
 
+        self._reindex(new_region.index + 1)
+
+    def _reindex(self, start):
+        for i in range(start, len(self.file_regions)):
+            self.file_regions[i].index = i
 
 
 
