@@ -97,11 +97,23 @@ class FileModel:
             first_region.end = new_region.start - 1
             last_region.start = new_region.end + 1
 
-        self._reindex(new_region.index + 1)
-
-    def _reindex(self, start):
-        for i in range(start, len(self.file_regions)):
+        # исправляем индексы
+        for i in range(new_region.index + 1, len(self.file_regions)):
             self.file_regions[i].index = i
+
+    def insert(self, offset: int, data: list) -> None:
+        """Вставляет data по смещению offset"""
+        previous = self.search_region(offset)
+        new_region = EditedFileRegion(offset, data, previous.index + 1)
+
+        self.file_regions.insert(new_region.index, new_region)
+
+        # исправляем границы и индексы
+        for i in range(new_region.index + 1, len(self.file_regions)):
+            self.file_regions[i].start = self.file_regions[i - 1].end + 1
+            self.file_regions[i].index = i
+
+
 
 
 
