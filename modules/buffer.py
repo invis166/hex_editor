@@ -6,7 +6,7 @@ class DataBuffer:
         self._buffer_max_length = 16 * 16 * 4
         self.buffer = []
 
-        self._file_model: FileModel = file_model
+        self._file_model = file_model
         self._initial_region: FileRegion = None
         self._current_region: FileRegion = None
 
