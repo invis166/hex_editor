@@ -48,4 +48,29 @@
 \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-
 
 пофиксил баги(вроде), нужно еще написать еще тестов и навести порядок в имеющихся.  
-По идее, осталось реализовать только удаление, и можно по-тихоньку начинать делать UI
+По идее, осталось реализовать только удаление, и можно по-тихоньку начинать делать UI  
+
+
+```python
+>>> editor = main.HexEditor('simple_file.txt')
+>>> bytes(editor.get_nbytes(0, 11))
+b'AAAABBBBBCC'
+>>> editor.insert(7, b'dfg')
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+AttributeError: 'HexEditor' object has no attribute 'insert'
+>>> editor.insert_bytes(7, b'dfg')
+>>> bytes(editor.get_nbytes(0, 14))
+b'AAAABBBdfgAAAA'
+>>> editor.replace_bytes(3, b'abc')
+>>> bytes(editor.get_nbytes(0, 14))
+b'AAAabcAdfgAAAA'
+>>> editor._model.file_regions
+[FileRegion(0, 2), EditedFileRegion(3, 5, b'abc'), FileRegion(6, 6), EditedFileRegion(7, 9, b'dfg'), FileRegion(10, 14)]
+>>> editor.insert_bytes(4, '12345')
+>>> editor._model.file_regions
+[FileRegion(0, 2), EditedFileRegion(3, 5, b''), EditedFileRegion(4, 8, 12345), EditedFileRegion(9, 8, b''), FileRegion(11, 11), EditedFileRegion(12, 14, b'dfg'), FileRegion(15, 19)]
+>>> editor.get_nbytes(0, 19)
+[65, 65, 65, '1', '2', '3', '4', '5', 65, 100, 102, 103, 65, 65, 65, 65]
+```  
+new bug
