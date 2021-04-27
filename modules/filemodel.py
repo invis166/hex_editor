@@ -40,11 +40,11 @@ class FileRegion:
 
 
 class EditedFileRegion(FileRegion):
-    def __init__(self, start: int, data: list, index: int):
+    def __init__(self, start: int, data: bytes, index: int):
         super().__init__(start, len(data) + start - 1, index)
         self.data = data
 
-    def get_nbytes(self, offset: int, count: int) -> list:
+    def get_nbytes(self, offset: int, count: int) -> bytes:
         return self.data[offset:offset + count]
 
     def __repr__(self):
@@ -60,7 +60,7 @@ class FileModel:
         """Возвращает FileRegion, который находится по смещению offset"""
         return self.file_regions[bisect.bisect_left(self.file_regions, offset)]
 
-    def replace(self, offset: int, data: list) -> None:
+    def replace(self, offset: int, data: bytes) -> None:
         """Заменяет байты со смещения offset на data"""
         # TODO: должна быть оптимизация, когда изменяются смежные байты
 
@@ -107,7 +107,7 @@ class FileModel:
         for i in range(new_region.index + 1, len(self.file_regions)):
             self.file_regions[i].index = i
 
-    def insert(self, offset: int, data: list) -> None:
+    def insert(self, offset: int, data: bytes) -> None:
         """Вставляет data по смещению offset"""
         previous = self.search_region(offset)
 
