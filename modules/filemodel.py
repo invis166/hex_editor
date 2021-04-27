@@ -10,7 +10,7 @@ class FileRegion:
         self.index = index
 
     def split(self, pos: int, offset: int = 0) -> tuple:
-        """Разбивает текущий регион на 2 по позиции pos, так, что конец первого
+        """Разбивает текущий регион на 2 по позиции pos, так, что конец левого
         региона меньше начала правого. Добавляет к началу правого региона
         offset, если он передан."""
         return FileRegion(self.start, pos - 1, self.index),\
@@ -71,8 +71,10 @@ class FileModel:
             total_bytes += last_region.length
 
         if offset == first_region.start:
+            # вставка будет перед первым регионом
             new_region_index = first_region.index
         else:
+            # вставка будет после первого региона
             new_region_index = first_region.index + 1
         new_region = EditedFileRegion(offset, data, new_region_index)
 
@@ -82,6 +84,7 @@ class FileModel:
                and new_region.end >= self.file_regions[to_delete].end):
             self.file_regions.pop(to_delete)
 
+        # исправляем границы регионов
         if (first_region == last_region
                 and new_region.start == first_region.start):
             # замена была с начала региона
@@ -110,9 +113,11 @@ class FileModel:
         previous = self.search_region(offset)
 
         if offset == previous.start:
+            # вставка будет перед предыдущим регионом
             new_region_index = previous.index
             new_region_start = previous.start
         else:
+            # вставка будет в середине предыдущего региона
             new_region_index = previous.index + 1
             new_region_start = offset
             head, tail = previous.split(offset)
