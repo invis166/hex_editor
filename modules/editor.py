@@ -1,6 +1,6 @@
 import os.path
-from buffer import DataBuffer
-from filemodel import FileModel, FileRegion, EditedFileRegion
+from modules.buffer import DataBuffer
+from modules.filemodel import FileModel, FileRegion, EditedFileRegion
 
 
 class HexEditor:
@@ -26,9 +26,14 @@ class HexEditor:
 			if isinstance(region, EditedFileRegion):
 				self._fp.seek(region.start)
 				self._fp.write(region.data)
+		self._fp.flush()
+
+	def exit(self):
+		self._fp.flush()
+		self._fp.close()
 
 	def __del__(self):
-		self.fp.close()
+		self.exit()
 
 
 if __name__ == '__main__':
