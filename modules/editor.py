@@ -12,13 +12,13 @@ class HexEditor:
 	def get_nbytes(self, offset: int, count: int) -> list:
 		return self._buffer.read_nbytes(offset, count)
 
-	def replace_bytes(self, offset: int, data: list) -> None:
+	def replace_bytes(self, offset: int, data: bytes) -> None:
 		self._model.replace(offset, data)
 
-	def insert_bytes(self, offset: int, data: list) -> None:
+	def insert_bytes(self, offset: int, data: bytes) -> None:
 		self._model.insert(offset, data)
 
-	def remove_bytes(self):
+	def remove_bytes(self, offset: int, data: bytes):
 		pass
 
 	def save_changes(self):
@@ -27,6 +27,9 @@ class HexEditor:
 				self._fp.seek(region.start)
 				self._fp.write(region.data)
 		self._fp.flush()
+
+		self._model = FileModel(self._model.file_regions[-1].end + 1)
+		self._buffer._file_model = self._model
 
 	def exit(self):
 		self._fp.close()
