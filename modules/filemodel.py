@@ -9,6 +9,10 @@ class FileRegion:
         self.end = end
         self.index = index
 
+    def split(self, pos: int):
+        return FileRegion(self.start, pos - 1, self.index), \
+               FileRegion(pos, self.end, self.index + 1)
+
     @property
     def length(self):
         return self.end - self.start + 1
@@ -104,13 +108,26 @@ class FileModel:
     def insert(self, offset: int, data: list) -> None:
         """Вставляет data по смещению offset"""
         previous = self.search_region(offset)
-        new_region = EditedFileRegion(offset, data, previous.index + 1)
+
+        if offset == previous.start:
+            new_region_index = previous.index
+            new_region_start = previous.start
+        else:
+            new_region_index = previous.index + 1
+            new_region_start = offset
+            head, tail = previous.split(offset)
+            previous.end = head.end
+            self.file_regions.insert(tail.index, tail)
+        new_region = EditedFileRegion(new_region_start,
+                                      data,
+                                      new_region_index)
 
         self.file_regions.insert(new_region.index, new_region)
 
         # исправляем границы и индексы
         for i in range(new_region.index + 1, len(self.file_regions)):
-            self.file_regions[i].start = self.file_regions[i - 1].end + 1
+            self.file_regions[i].start += new_region.length
+            self.file_regions[i].end += new_region.length
             self.file_regions[i].index = i
 
 
