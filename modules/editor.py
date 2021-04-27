@@ -29,7 +29,6 @@ class HexEditor:
 		self._fp.flush()
 
 	def exit(self):
-		self._fp.flush()
 		self._fp.close()
 
 	def __del__(self):
