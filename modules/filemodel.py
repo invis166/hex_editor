@@ -9,9 +9,22 @@ class FileRegion:
         self.end = end
         self.index = index
 
+        # при вставке приходится сдвигать регионы, из за чего пропадает
+        # взаимно однозначное соответствие между регионом и его местом в файле
+        self.__original_start = self.start
+        self.__original_end = self.end
+
     def move(self, count: int) -> None:
         self.start += count
         self.end += count
+
+    @property
+    def original_start(self) -> int:
+        return self.__original_start
+
+    @property
+    def original_end(self) -> int:
+        return self.__original_end
 
     def split(self, pos: int, offset: int = 0) -> tuple:
         """Разбивает текущий регион на два по позиции pos так, что конец левого
@@ -76,8 +89,12 @@ class EditedFileRegion(FileRegion):
         self.__end = value
 
     def split(self, pos: int, offset: int = 0) -> tuple:
-        return EditedFileRegion(self.start, self.data[:pos], self.index), \
-               EditedFileRegion(pos + offset, self.data[pos:], self.index + 1)
+        return EditedFileRegion(self.start,
+                                self.data[:pos - self.start],
+                                self.index),\
+               EditedFileRegion(pos + offset,
+                                self.data[pos - self.start:],
+                                self.index + 1)
 
     def move(self, count: int) -> None:
         self.__start += count
