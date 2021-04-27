@@ -139,13 +139,11 @@ class FileModelTestCase(unittest.TestCase):
                          data=[1, 2, 3], expected_length=6)
         self._check_bounds()
 
-
     def _check_bounds(self):
         self.assertEqual(self.model.file_regions[0].start, 0)
         for i in range(1, len(self.model.file_regions)):
             self.assertEqual(self.model.file_regions[i].start,
                              self.model.file_regions[i - 1].end + 1)
-
 
 
 class FileRegionTestCase(unittest.TestCase):
