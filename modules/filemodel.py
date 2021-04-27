@@ -9,6 +9,10 @@ class FileRegion:
         self.end = end
         self.index = index
 
+    def move(self, count: int) -> None:
+        self.start += count
+        self.end += count
+
     def split(self, pos: int, offset: int = 0) -> tuple:
         """Разбивает текущий регион на два по позиции pos так, что конец левого
         региона в pos - 1, начало правого в pos, индекс левого равен индексу
@@ -41,8 +45,43 @@ class FileRegion:
 
 class EditedFileRegion(FileRegion):
     def __init__(self, start: int, data: bytes, index: int):
-        super().__init__(start, len(data) + start - 1, index)
+        # super().__init__(start, len(data) + start - 1, index)
+        self.index = index
+        self.__start = start
+        self.__end = len(data) + start - 1
         self.data = data
+
+    @property
+    def start(self):
+        return self.__start
+
+    @start.setter
+    def start(self, value: int):
+        if value < self.__start:
+            raise ValueError
+
+        self.data = self.data[value - self.__start:]
+        self.__start = value
+
+    @property
+    def end(self):
+        return self.__end
+
+    @end.setter
+    def end(self, value: int):
+        if value > self.__end:
+            raise ValueError
+
+        self.data = self.data[:-(self.__end - value)]
+        self.__end = value
+
+    def split(self, pos: int, offset: int = 0) -> tuple:
+        return EditedFileRegion(self.start, self.data[:pos], self.index), \
+               EditedFileRegion(pos + offset, self.data[pos:], self.index + 1)
+
+    def move(self, count: int) -> None:
+        self.__start += count
+        self.__end += count
 
     def get_nbytes(self, offset: int, count: int) -> bytes:
         return self.data[offset:offset + count]
@@ -57,7 +96,7 @@ class FileModel:
         self.file_regions = [FileRegion(0, self.size - 1, 0)]
 
     def search_region(self, offset: int) -> FileRegion:
-        """Возвращает FileRegion, который находится по смещению offset"""
+        """Возвращает FileRegion, который соответствует смещению offset"""
         return self.file_regions[bisect.bisect_left(self.file_regions, offset)]
 
     def replace(self, offset: int, data: bytes) -> None:
@@ -67,7 +106,7 @@ class FileModel:
         # находим первый и последний регионы, что были задействованы
         first_region = last_region = self.search_region(offset)
         total_bytes = last_region.length
-        while total_bytes < len(data):
+        while total_bytes - offset + first_region.start < len(data):
             last_region = self.file_regions[last_region.index + 1]
             total_bytes += last_region.length
 
@@ -130,8 +169,7 @@ class FileModel:
 
         # исправляем границы и индексы
         for i in range(new_region.index + 1, len(self.file_regions)):
-            self.file_regions[i].start += new_region.length
-            self.file_regions[i].end += new_region.length
+            self.file_regions[i].move(new_region.length)
             self.file_regions[i].index = i
 
 # TODO
