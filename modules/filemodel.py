@@ -192,5 +192,19 @@ class FileModel:
             self.file_regions[i].move(new_region.length)
             self.file_regions[i].index = i
 
+    def remove(self, offset: int, count: int) -> None:
+        # находим первый и последний регионы, что были задействованы, попутно
+        # удаляя промежуточные
+        first_region = self.search_region(offset)
+        to_delete = first_region.index
+        while (offset <= self.file_regions[to_delete].start
+               and offset + count >= self.file_regions[to_delete].end):
+            self.file_regions.pop(to_delete)
+        last_region = self.file_regions[to_delete]
+
+
+
+
+
 # TODO
 # 1. linked list?
