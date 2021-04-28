@@ -109,8 +109,11 @@ class EditedFileRegion(FileRegion):
 
 class FileModel:
     def __init__(self, file_size: int):
-        self.size = file_size
-        self.file_regions = [FileRegion(0, self.size - 1, 0)]
+        self.file_regions = [FileRegion(0, file_size - 1, 0)]
+
+    @property
+    def file_size(self) -> int:
+        return self.file_regions[-1].end + 1
 
     def search_region(self, offset: int) -> FileRegion:
         """Возвращает FileRegion, который соответствует смещению offset"""
