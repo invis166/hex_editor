@@ -35,11 +35,13 @@ class DataBuffer:
                                                                    to_read))
             else:
                 # текущий регион лежит на диске
+                old_position = self._fp.tell()
                 self._fp.seek(self._current_region.original_start)
                 self.buffer.extend(self._fp.read(to_read))
+                self._fp.seek(old_position)
             read_total += to_read
 
-            if self._current_region < offset + count:
+            if self._current_region < offset + count - 1:
                 # идем к следующему региону
                 self._current_region = \
                     self._file_model.file_regions[self._current_region.index + 1]
