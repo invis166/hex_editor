@@ -89,6 +89,11 @@ class FileModelTestCase(unittest.TestCase):
         self._check_adjacent_borders(new, left_start=6, right_end=17)
         self._check_indices()
 
+    def test_replace_all(self):
+        self.model.replace(0, list(range(31)))
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(31)), expected_length=1)
+
     def _check_indices(self):
         for index, region in enumerate(self.model.file_regions):
             self.assertEqual(region.index, index)
