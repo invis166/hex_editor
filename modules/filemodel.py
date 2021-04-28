@@ -145,23 +145,24 @@ class FileModel:
             new_region_index = first_region.index + 1
         new_region = EditedFileRegion(offset, data, new_region_index)
 
-        # исправляем границы регионов
-        if (first_region == last_region
-                and new_region.start == first_region.start):
-            # замена была с начала региона
-            last_region.start = new_region.end + 1
-        elif first_region == last_region and new_region.end == last_region.end:
-            # замена была до конца региона
-            first_region.end = new_region.start - 1
-        elif first_region == last_region:
-            # замена была в середине региона
-            head, tail = first_region.split(offset, new_region.length)
-            self.file_regions.insert(tail.index, tail)
-            first_region.end = head.end
-        else:
-            # замена была больше, чем в одном регионе
-            first_region.end = new_region.start - 1
-            last_region.start = new_region.end + 1
+        self._fix_bounds(new_region, first_region, last_region)
+        # # исправляем границы регионов
+        # if (first_region == last_region
+        #         and new_region.start == first_region.start):
+        #     # замена была с начала региона
+        #     last_region.start = new_region.end + 1
+        # elif first_region == last_region and new_region.end == last_region.end:
+        #     # замена была до конца региона
+        #     first_region.end = new_region.start - 1
+        # elif first_region == last_region:
+        #     # замена была в середине региона
+        #     head, tail = first_region.split(offset, new_region.length)
+        #     self.file_regions.insert(tail.index, tail)
+        #     first_region.end = head.end
+        # else:
+        #     # замена была больше, чем в одном регионе
+        #     first_region.end = new_region.start - 1
+        #     last_region.start = new_region.end + 1
 
         self.file_regions.insert(new_region.index, new_region)
 
@@ -198,6 +199,24 @@ class FileModel:
             self.file_regions[i].index = i
 
         return new_region.index
+
+    def _fix_bounds(self, new_region: FileRegion,
+                    left: FileRegion, right: FileRegion) -> None:
+        if left == right and new_region.start == left.start:
+            # замена была с начала региона
+            left.start = new_region.end + 1
+        elif left == right and new_region.end == right.end:
+            # замена была до конца региона
+            left.end = new_region.start - 1
+        elif left == right:
+            # замена была в середине региона
+            head, tail = left.split(new_region.start, new_region.length)
+            self.file_regions.insert(tail.index, tail)
+            left.end = head.end
+        else:
+            # замена была больше, чем в одном регионе
+            left.end = new_region.start - 1
+            right.start = new_region.end + 1
 
 # TODO
 # 1. linked list?
