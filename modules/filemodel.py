@@ -31,8 +31,8 @@ class FileRegion:
         региона в pos - 1, начало правого в pos, индекс левого равен индексу
         исходного региона, индекс правого на единицу больше индекса левого.
         Добавляет к началу правого региона offset, если он передан."""
-        return FileRegion(self.start, pos - 1, self.index),\
-            FileRegion(pos + offset, self.end, self.index + 1)
+        return FileRegion(self.start, pos - 1, self.index), \
+               FileRegion(pos + offset, self.end, self.index + 1)
 
     @property
     def length(self) -> int:
@@ -91,7 +91,7 @@ class EditedFileRegion(FileRegion):
     def split(self, pos: int, offset: int = 0) -> tuple:
         return EditedFileRegion(self.start,
                                 self.data[:pos - self.start],
-                                self.index),\
+                                self.index), \
                EditedFileRegion(pos + offset,
                                 self.data[pos - self.start:],
                                 self.index + 1)
@@ -123,24 +123,28 @@ class FileModel:
         """Заменяет байты со смещения offset на data"""
         # TODO: должна быть оптимизация, когда изменяются смежные байты
 
-        # находим первый и последний регионы, что были задействованы
-        first_region = last_region = self.search_region(offset)
-        total_bytes = last_region.length
-        while total_bytes - offset + first_region.start < len(data):
-            last_region = self.file_regions[last_region.index + 1]
-            total_bytes += last_region.length
+        # находим первый и последний регионы, что были задействованы, попутно
+        # удаляя перезаписанные
+        first_region = self.search_region(offset)
+        to_delete = first_region.index
+        while (offset <= self.file_regions[to_delete].start
+               and self.file_regions[to_delete].end <= offset + len(data) - 1):
+            self.file_regions.pop(to_delete)
+            if to_delete >= len(self.file_regions):
+                break
+
+        if not self.file_regions:
+            # граничный случай, файл был полностью перезаписан за раз
+            self.file_regions = [EditedFileRegion(offset, data, 0)]
+            return
+
+        last_region = self.file_regions[to_delete]
 
         if offset == first_region.start:
             new_region_index = first_region.index
         else:
             new_region_index = first_region.index + 1
         new_region = EditedFileRegion(offset, data, new_region_index)
-
-        # удаляем регионы, что были перезаписаны
-        to_delete = first_region.index
-        while (new_region.start <= self.file_regions[to_delete].start
-               and new_region.end >= self.file_regions[to_delete].end):
-            self.file_regions.pop(to_delete)
 
         # исправляем границы регионов
         if (first_region == last_region
