@@ -89,10 +89,21 @@ class FileModelTestCase(unittest.TestCase):
         self._check_adjacent_borders(new, left_start=6, right_end=17)
         self._check_indices()
 
+    def test_replace_many_from_middle(self):
+        self.model.replace(2, list(range(13)))
+        new = self.model.file_regions[1]
+        self._basic_test(region_index=1, offset=2,
+                         data=list(range(13)), expected_length=4)
+        self._check_adjacent_borders(new, left_start=0, right_end=17)
+        self._check_indices()
+
     def test_replace_all(self):
         self.model.replace(0, list(range(31)))
-        self._basic_test(region_index=0, offset=0,
-                         data=list(range(31)), expected_length=1)
+        new = self.model.file_regions[0]
+        self.assertEqual(new.start, 0)
+        self.assertEqual(new.end, 0)
+        self.assertEqual(new.data, b'')
+        self.assertEqual(len(self.model.file_regions), 1)
 
     def _check_indices(self):
         for index, region in enumerate(self.model.file_regions):
@@ -103,7 +114,7 @@ class FileModelTestCase(unittest.TestCase):
         self.assertIsInstance(new, EditedFileRegion)
         self.assertEqual(len(self.model.file_regions), expected_length)
         self.assertEqual(new.start, offset)
-        self.assertEqual(new.end, offset + len(data) - 1)
+        self.assertEqual(new.end, max(offset + len(data) - 1, 0))
         self.assertListEqual(data, new.data)
 
     def _check_adjacent_borders(self, region, left_start=None, right_end=None):

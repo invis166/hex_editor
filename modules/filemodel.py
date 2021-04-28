@@ -31,8 +31,8 @@ class FileRegion:
         региона в pos - 1, начало правого в pos, индекс левого равен индексу
         исходного региона, индекс правого на единицу больше индекса левого.
         Добавляет к началу правого региона offset, если он передан."""
-        return FileRegion(self.start, pos - 1, self.index), \
-               FileRegion(pos + offset, self.end, self.index + 1)
+        return FileRegion(self.start, pos - 1, self.index),\
+            FileRegion(pos + offset, self.end, self.index + 1)
 
     @property
     def length(self) -> int:
@@ -61,7 +61,7 @@ class EditedFileRegion(FileRegion):
         # super().__init__(start, len(data) + start - 1, index)
         self.index = index
         self.__start = start
-        self.__end = len(data) + start - 1
+        self.__end = max(len(data) + start - 1, 0)
         self.data = data
 
     @property
@@ -91,7 +91,7 @@ class EditedFileRegion(FileRegion):
     def split(self, pos: int, offset: int = 0) -> tuple:
         return EditedFileRegion(self.start,
                                 self.data[:pos - self.start],
-                                self.index), \
+                                self.index),\
                EditedFileRegion(pos + offset,
                                 self.data[pos - self.start:],
                                 self.index + 1)
@@ -119,7 +119,7 @@ class FileModel:
         """Возвращает FileRegion, который соответствует смещению offset"""
         return self.file_regions[bisect.bisect_left(self.file_regions, offset)]
 
-    def replace(self, offset: int, data: bytes) -> None:
+    def replace(self, offset: int, data: bytes) -> int:
         """Заменяет байты со смещения offset на data"""
         # TODO: должна быть оптимизация, когда изменяются смежные байты
 
@@ -127,17 +127,16 @@ class FileModel:
         # удаляя перезаписанные
         first_region = self.search_region(offset)
         to_delete = first_region.index
-        while (offset <= self.file_regions[to_delete].start
-               and self.file_regions[to_delete].end <= offset + len(data) - 1):
-            self.file_regions.pop(to_delete)
-            if to_delete >= len(self.file_regions):
-                break
+        while to_delete < len(self.file_regions) and offset + len(data) - 1 >= self.file_regions[to_delete].end:
+            if offset <= self.file_regions[to_delete].start:
+                self.file_regions.pop(to_delete)
+            else:
+                to_delete += 1
 
         if not self.file_regions:
-            # граничный случай, файл был полностью перезаписан за раз
-            self.file_regions = [EditedFileRegion(offset, data, 0)]
-            return
-
+            # граничный случай, если перезаписали весь файл
+            self.file_regions = [EditedFileRegion(0, b'', 0)]
+            return 0
         last_region = self.file_regions[to_delete]
 
         if offset == first_region.start:
@@ -170,7 +169,9 @@ class FileModel:
         for i in range(new_region.index + 1, len(self.file_regions)):
             self.file_regions[i].index = i
 
-    def insert(self, offset: int, data: bytes) -> None:
+        return new_region.index
+
+    def insert(self, offset: int, data: bytes) -> int:
         """Вставляет data по смещению offset"""
         previous = self.search_region(offset)
 
@@ -196,19 +197,7 @@ class FileModel:
             self.file_regions[i].move(new_region.length)
             self.file_regions[i].index = i
 
-    def remove(self, offset: int, count: int) -> None:
-        # находим первый и последний регионы, что были задействованы, попутно
-        # удаляя промежуточные
-        first_region = self.search_region(offset)
-        to_delete = first_region.index
-        while (offset <= self.file_regions[to_delete].start
-               and offset + count >= self.file_regions[to_delete].end):
-            self.file_regions.pop(to_delete)
-        last_region = self.file_regions[to_delete]
-
-
-
-
+        return new_region.index
 
 # TODO
 # 1. linked list?
