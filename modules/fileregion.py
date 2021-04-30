@@ -59,7 +59,7 @@ class FileRegion:
         right = FileRegion(pos, self.end, self.index + 1)
         right.__set_original_bounds(self.__original_end - (self._end - pos),
                                     self.__original_end)
-        
+
         return left, right
 
     @property
