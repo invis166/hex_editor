@@ -1,6 +1,7 @@
 import unittest
 
-from modules.filemodel import FileRegion, EditedFileRegion, FileModel
+from modules.filemodel import FileModel
+from modules.fileregion import FileRegion, EditedFileRegion
 
 
 def convert_tuples_to_regions(*regions, is_edited=False):
@@ -227,15 +228,15 @@ class FileRegionTestCase(unittest.TestCase):
         self.assertFalse(FileRegion(5, 10, 0) < 4)
         self.assertFalse(FileRegion(5, 10, 0) < 7)
 
-    def test_start_addition(self):
+    def test_truncate_start(self):
         region = FileRegion(0, 10, 0)
-        region.start += 5
+        region.truncate_start(5)
         self.assertEqual(region.start, 5)
         self.assertEqual(region.original_start, 5)
 
-    def test_end_subtraction(self):
+    def test_truncate_end(self):
         region = FileRegion(0, 10, 0)
-        region.end -= 5
+        region.truncate_end(5)
         self.assertEqual(region.end, 5)
         self.assertEqual(region.original_end, 5)
 
