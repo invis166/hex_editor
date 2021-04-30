@@ -37,17 +37,72 @@ class FileModelTestCase(unittest.TestCase):
         self._test_search((18, 30), 19)
         self._test_search((18, 30), 20)
 
-    def _test_search(self, expected, offset):
-        result = convert_regions_to_tuples([self.model.search_region(offset)])[0]
-        self.assertSequenceEqual(expected, result)
-
-    def test_replace_single_from_start(self):
+    def test_replace_from_start(self):
         self.model.replace(0, [1, 2, 3, 4])
         self._basic_test(region_index=0, offset=0,
                          data=[1, 2, 3, 4], expected_length=5)
         new = self.model.file_regions[0]
         self._check_adjacent_borders(new, right_end=5)
-        self._check_indices()
+
+    def test_replace_from_start_many(self):
+        self.model.replace(6, list(range(20)))
+        new = self.model.file_regions[1]
+        self._basic_test(region_index=1, offset=6,
+                         data=list(range(20)), expected_length=3)
+        self._check_adjacent_borders(new, left_start=0, right_end=30)
+
+    def test_replace_from_start_many_2(self):
+        self.model.replace(0, list(range(11)))
+        new = self.model.file_regions[0]
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(11)), expected_length=3)
+        self._check_adjacent_borders(new, right_end=17)
+
+    def test_replace_in_middle(self):
+        self.model.replace(2, [1, 2, 3])
+        new = self.model.file_regions[1]
+        self._basic_test(region_index=1, offset=2,
+                         data=[1, 2, 3], expected_length=6)
+        self._check_adjacent_borders(new, left_start=0, right_end=5)
+
+    def test_replace_to_end(self):
+        self.model.replace(7, list(range(4)))
+        new = self.model.file_regions[2]
+        self._basic_test(region_index=2, offset=7,
+                         data=list(range(4)), expected_length=5)
+        self._check_adjacent_borders(new, left_start=6, right_end=17)
+
+    def test_replace_from_middle_many(self):
+        self.model.replace(2, list(range(13)))
+        new = self.model.file_regions[1]
+        self._basic_test(region_index=1, offset=2,
+                         data=list(range(13)), expected_length=4)
+        self._check_adjacent_borders(new, left_start=0, right_end=17)
+
+    def test_replace_all(self):
+        self.model.replace(0, list(range(31)))
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(31)), expected_length=1)
+
+    def test_insert_in_beginning_1(self):
+        self.model.insert(0, [1, 2, 3])
+        self._basic_test(region_index=0, offset=0,
+                         data=[1, 2, 3], expected_length=5)
+
+    def test_insert_in_beginning_2(self):
+        self.model.insert(6, [1, 2, 3, 4])
+        self._basic_test(region_index=1, offset=6,
+                         data=[1, 2, 3, 4], expected_length=5)
+
+    def test_insert_in_middle_1(self):
+        self.model.insert(2, [1, 2, 3])
+        self._basic_test(region_index=1, offset=2,
+                         data=[1, 2, 3], expected_length=6)
+
+    def test_insert_in_middle_2(self):
+        self.model.insert(7, [1, 2, 3])
+        self._basic_test(region_index=2, offset=7,
+                         data=[1, 2, 3], expected_length=6)
 
     def test_replace_full_region(self):
         self.model.replace(0, [1, 2, 3, 4, 5, 6])
@@ -55,67 +110,83 @@ class FileModelTestCase(unittest.TestCase):
         self._basic_test(region_index=0, offset=0,
                          data=[1, 2, 3, 4, 5, 6], expected_length=4)
         self._check_adjacent_borders(new, right_end=10)
-        self._check_indices()
 
-    def test_replace_many_regions_1(self):
-        self.model.replace(6, list(range(20)))
-        new = self.model.file_regions[1]
-        self._basic_test(region_index=1, offset=6,
-                         data=list(range(20)), expected_length=3)
-        self._check_adjacent_borders(new, left_start=0, right_end=30)
-        self._check_indices()
-
-    def test_replace_many_regions_2(self):
-        self.model.replace(0, list(range(11)))
-        new = self.model.file_regions[0]
+    def test_remove_all(self):
+        self.model.remove(0, 31)
         self._basic_test(region_index=0, offset=0,
-                         data=list(range(11)), expected_length=3)
-        self._check_adjacent_borders(new, right_end=17)
-        self._check_indices()
+                         data=b'', expected_length=1,
+                         is_removing=True)
 
-    def test_replace_single_in_middle(self):
-        self.model.replace(2, [1, 2, 3])
-        new = self.model.file_regions[1]
-        self._basic_test(region_index=1, offset=2,
-                         data=[1, 2, 3], expected_length=6)
-        self._check_adjacent_borders(new, left_start=0, right_end=5)
-        self._check_indices()
+    def test_remove_from_start(self):
+        self.model.remove(0, 4)
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(2)), expected_length=4,
+                         is_removing=True)
 
-    def test_replace_single_to_end(self):
-        self.model.replace(7, list(range(4)))
-        new = self.model.file_regions[2]
-        self._basic_test(region_index=2, offset=7,
-                         data=list(range(4)), expected_length=5)
-        self._check_adjacent_borders(new, left_start=6, right_end=17)
-        self._check_indices()
+    def test_remove_from_start_many(self):
+        self.model.remove(0, 15)
+        self._basic_test(region_index=0, offset=0,
+                         data=[4, 5, 6], expected_length=2,
+                         is_removing=True)
 
-    def test_replace_many_from_middle(self):
-        self.model.replace(2, list(range(13)))
-        new = self.model.file_regions[1]
-        self._basic_test(region_index=1, offset=2,
-                         data=list(range(13)), expected_length=4)
-        self._check_adjacent_borders(new, left_start=0, right_end=17)
-        self._check_indices()
+    def test_remove_from_middle(self):
+        self.model.remove(1, 3)
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(1)), expected_length=5,
+                         is_removing=True)
 
-    def test_replace_all(self):
-        self.model.replace(0, list(range(31)))
-        new = self.model.file_regions[0]
-        self.assertEqual(new.start, 0)
-        self.assertEqual(new.end, 0)
-        self.assertEqual(new.data, b'')
-        self.assertEqual(len(self.model.file_regions), 1)
+    def test_remove_from_middle_many(self):
+        self.model.remove(2, 13)
+        self._basic_test(region_index=0, offset=0,
+                         data=[0, 1], expected_length=3,
+                         is_removing=True)
+
+    def test_remove_to_end(self):
+        self.model.remove(2, 4)
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(2)), expected_length=4,
+                         is_removing=True)
+
+    def test_remove_to_end_many(self):
+        self.model.remove(3, 15)
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(3)), expected_length=2,
+                         is_removing=True)
+
+    def test_remove_whole_region(self):
+        self.model.remove(0, 6)
+        self._basic_test(region_index=0, offset=0,
+                         data=list(range(5)), expected_length=3,
+                         is_removing=True)
 
     def _check_indices(self):
         for index, region in enumerate(self.model.file_regions):
             self.assertEqual(region.index, index)
 
-    def _basic_test(self, region_index, offset, data, expected_length):
+    def _test_search(self, expected, offset):
+        result = convert_regions_to_tuples([self.model.search_region(offset)])[0]
+        self.assertSequenceEqual(expected, result)
+
+    def _basic_test(self, region_index, offset, data, expected_length, is_removing=False):
         new = self.model.file_regions[region_index]
-        self.assertIsInstance(new, EditedFileRegion)
+        if is_removing:
+            self.assertIsInstance(new, FileRegion)
+        else:
+            self.assertIsInstance(new, EditedFileRegion)
         self.assertEqual(len(self.model.file_regions), expected_length)
         self.assertEqual(new.start, offset)
         self.assertEqual(new.end, max(offset + len(data) - 1, 0))
-        self.assertListEqual(data, new.data)
+        if not is_removing:
+            self.assertListEqual(data, new.data)
+
+        self._check_bounds()
+        self._check_indices()
+
+    def _check_bounds(self):
+        self.assertEqual(self.model.file_regions[0].start, 0)
+        for i in range(1, len(self.model.file_regions)):
+            self.assertEqual(self.model.file_regions[i].start,
+                             self.model.file_regions[i - 1].end + 1)
 
     def _check_adjacent_borders(self, region, left_start=None, right_end=None):
         if (region.index != len(self.model.file_regions)
@@ -130,36 +201,6 @@ class FileModelTestCase(unittest.TestCase):
                              left_start)
             self.assertEqual(self.model.file_regions[region.index - 1].end,
                              region.start - 1)
-
-    def test_insert_in_beginning_1(self):
-        self.model.insert(0, [1, 2, 3])
-        self._basic_test(region_index=0, offset=0,
-                         data=[1, 2, 3], expected_length=5)
-        self._check_bounds()
-
-    def test_insert_in_beginning_2(self):
-        self.model.insert(6, [1, 2, 3, 4])
-        self._basic_test(region_index=1, offset=6,
-                         data=[1, 2, 3, 4], expected_length=5)
-        self._check_bounds()
-
-    def test_inserting_in_middle_1(self):
-        self.model.insert(2, [1, 2, 3])
-        self._basic_test(region_index=1, offset=2,
-                         data=[1, 2, 3], expected_length=6)
-        self._check_bounds()
-
-    def test_inserting_in_middle_2(self):
-        self.model.insert(7, [1, 2, 3])
-        self._basic_test(region_index=2, offset=7,
-                         data=[1, 2, 3], expected_length=6)
-        self._check_bounds()
-
-    def _check_bounds(self):
-        self.assertEqual(self.model.file_regions[0].start, 0)
-        for i in range(1, len(self.model.file_regions)):
-            self.assertEqual(self.model.file_regions[i].start,
-                             self.model.file_regions[i - 1].end + 1)
 
 
 class FileRegionTestCase(unittest.TestCase):
@@ -185,6 +226,52 @@ class FileRegionTestCase(unittest.TestCase):
         self.assertFalse(FileRegion(5, 10, 0) < 5)
         self.assertFalse(FileRegion(5, 10, 0) < 4)
         self.assertFalse(FileRegion(5, 10, 0) < 7)
+
+    def test_start_addition(self):
+        region = FileRegion(0, 10, 0)
+        region.start += 5
+        self.assertEqual(region.start, 5)
+        self.assertEqual(region.original_start, 5)
+
+    def test_end_subtraction(self):
+        region = FileRegion(0, 10, 0)
+        region.end -= 5
+        self.assertEqual(region.end, 5)
+        self.assertEqual(region.original_end, 5)
+
+    def test_move(self):
+        region = FileRegion(0, 10, 0)
+        region.move(8)
+        self.assertEqual(region.start, 8)
+        self.assertEqual(region.end, 18)
+        self.assertEqual(region.original_start, 0)
+        self.assertEqual(region.original_end, 10)
+
+    def test_split_without_offset(self):
+        region = FileRegion(0, 10, 0)
+        region.move(8)
+        left, right = region.split(15)
+        self.assertEqual(left.start, 8)
+        self.assertEqual(left.end, 14)
+        self.assertEqual(right.start, 15)
+        self.assertEqual(right.end, 18)
+        self.assertEqual(left.original_start, 0)
+        self.assertEqual(left.original_end, 6)
+        self.assertEqual(right.original_start, 7)
+        self.assertEqual(right.original_end, 10)
+
+    def test_split_with_offset(self):
+        region = FileRegion(0, 10, 0)
+        region.move(8)
+        left, right = region.split(15, 3)
+        self.assertEqual(left.start, 8)
+        self.assertEqual(left.end, 14)
+        self.assertEqual(right.start, 18)
+        self.assertEqual(right.end, 18)
+        self.assertEqual(left.original_start, 0)
+        self.assertEqual(left.original_end, 6)
+        self.assertEqual(right.original_start, 10)
+        self.assertEqual(right.original_end, 10)
 
 
 if __name__ == '__main__':
