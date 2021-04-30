@@ -4,19 +4,61 @@ from functools import total_ordering
 
 @total_ordering
 class FileRegion:
+    # TODO: вместо сеттеров к start и end сделать методы truncate_start,
+    # truncate_end
     def __init__(self, start: int, end: int, index: int):
-        self.start = start
-        self.end = end
+        self._start = start
+        self._end = end
         self.index = index
 
-        # при вставке приходится сдвигать регионы, из за чего пропадает
-        # взаимно однозначное соответствие между регионом и его местом в файле
+        # нужны, чтобы сохранить взаимно однозначное соответствие между
+        # FileRegion и местом на диске
         self.__original_start = self.start
         self.__original_end = self.end
 
     def move(self, count: int) -> None:
-        self.start += count
-        self.end += count
+        """Сдвигает обе границы FileRegion на count, не изменяя original_end
+        и original_start"""
+        self._start += count
+        self._end += count
+
+    @property
+    def start(self):
+        return self._start
+
+    def truncate_start(self, value: int) -> None:
+        if value < 0:
+            raise ValueError
+
+        self.__original_start += value
+        self._start += value
+
+    @start.setter
+    def start(self, value):
+        if value < self.start:
+            raise ValueError
+
+        self.__original_start += value - self._start
+        self._start = value
+
+    @property
+    def end(self):
+        return self._end
+
+    def truncate_end(self, value: int) -> None:
+        if value < 0:
+            raise ValueError
+
+        self.__original_end -= value
+        self._end -= value
+
+    @end.setter
+    def end(self, value):
+        if value > self._end:
+            raise ValueError
+
+        self.__original_end += value - self._end
+        self._end = value
 
     @property
     def original_start(self) -> int:
@@ -31,12 +73,24 @@ class FileRegion:
         региона в pos - 1, начало правого в pos, индекс левого равен индексу
         исходного региона, индекс правого на единицу больше индекса левого.
         Добавляет к началу правого региона offset, если он передан."""
-        return FileRegion(self.start, pos - 1, self.index),\
-            FileRegion(pos + offset, self.end, self.index + 1)
+        # TODO: разбивка original_end и original_start (IMPORTANT!!!!)
+        left = FileRegion(self.start, pos - 1, self.index)
+        left.__set_original_bounds(self.__original_start,
+                                   self.__original_end - (self._end - pos) - 1)
+        right = FileRegion(pos, self.end, self.index + 1)
+        right.__set_original_bounds(self.__original_end - (self._end - pos),
+                                    self.__original_end)
+        right.start += offset
+
+        return left, right
 
     @property
     def length(self) -> int:
         return self.end - self.start + 1
+
+    def __set_original_bounds(self, start, end):
+        self.__original_end = end
+        self.__original_start = start
 
     def __eq__(self, other):
         if isinstance(other, int):
@@ -58,35 +112,24 @@ class FileRegion:
 
 class EditedFileRegion(FileRegion):
     def __init__(self, start: int, data: bytes, index: int):
-        # super().__init__(start, len(data) + start - 1, index)
-        self.index = index
-        self.__start = start
-        self.__end = max(len(data) + start - 1, 0)
+        super().__init__(start, max(len(data) + start - 1, 0), index)
         self.data = data
 
-    @property
-    def start(self):
-        return self.__start
-
-    @start.setter
+    @FileRegion.start.setter
     def start(self, value: int):
-        if value < self.__start:
+        if value < self._start:
             raise ValueError
 
-        self.data = self.data[value - self.__start:]
-        self.__start = value
+        self.data = self.data[value - self._start:]
+        self._start = value
 
-    @property
-    def end(self):
-        return self.__end
-
-    @end.setter
+    @FileRegion.end.setter
     def end(self, value: int):
-        if value > self.__end:
+        if value > self._end:
             raise ValueError
 
-        self.data = self.data[:-(self.__end - value)]
-        self.__end = value
+        self.data = self.data[:-(self._end - value)]
+        self._end = value
 
     def split(self, pos: int, offset: int = 0) -> tuple:
         return EditedFileRegion(self.start,
@@ -95,10 +138,6 @@ class EditedFileRegion(FileRegion):
                EditedFileRegion(pos + offset,
                                 self.data[pos - self.start:],
                                 self.index + 1)
-
-    def move(self, count: int) -> None:
-        self.__start += count
-        self.__end += count
 
     def get_nbytes(self, offset: int, count: int) -> bytes:
         return self.data[offset:offset + count]
@@ -122,47 +161,35 @@ class FileModel:
     def replace(self, offset: int, data: bytes) -> int:
         """Заменяет байты со смещения offset на data"""
         # TODO: должна быть оптимизация, когда изменяются смежные байты
-
-        # находим первый и последний регионы, что были задействованы, попутно
-        # удаляя перезаписанные
-        first_region = self.search_region(offset)
-        to_delete = first_region.index
-        while to_delete < len(self.file_regions) and offset + len(data) - 1 >= self.file_regions[to_delete].end:
-            if offset <= self.file_regions[to_delete].start:
-                self.file_regions.pop(to_delete)
-            else:
-                to_delete += 1
-
+        left, right = self._remove_intermediate_regions(offset,
+                                                        offset + len(data) - 1)
         if not self.file_regions:
-            # граничный случай, если перезаписали весь файл
-            self.file_regions = [EditedFileRegion(0, b'', 0)]
+            # граничный случай, был заменен весь файл
+            self.file_regions = [EditedFileRegion(0, data, 0)]
             return 0
-        last_region = self.file_regions[to_delete]
 
-        if offset == first_region.start:
-            new_region_index = first_region.index
+        if offset == left.start:
+            new_region_index = left.index
         else:
-            new_region_index = first_region.index + 1
+            new_region_index = left.index + 1
         new_region = EditedFileRegion(offset, data, new_region_index)
 
-        self._fix_bounds(new_region, first_region, last_region)
-        # # исправляем границы регионов
-        # if (first_region == last_region
-        #         and new_region.start == first_region.start):
-        #     # замена была с начала региона
-        #     last_region.start = new_region.end + 1
-        # elif first_region == last_region and new_region.end == last_region.end:
-        #     # замена была до конца региона
-        #     first_region.end = new_region.start - 1
-        # elif first_region == last_region:
-        #     # замена была в середине региона
-        #     head, tail = first_region.split(offset, new_region.length)
-        #     self.file_regions.insert(tail.index, tail)
-        #     first_region.end = head.end
-        # else:
-        #     # замена была больше, чем в одном регионе
-        #     first_region.end = new_region.start - 1
-        #     last_region.start = new_region.end + 1
+        # корректируем границы смежных с новым регионов
+        if left == right and new_region.start == left.start:
+            # изменения с начала региона
+            left.start = new_region.end + 1
+        elif left == right and new_region.end == right.end:
+            # изменения до конца региона
+            left.end = new_region.start - 1
+        elif left == right:
+            # изменения в середине региона
+            head, tail = left.split(new_region.start, new_region.length)
+            self.file_regions.insert(tail.index, tail)
+            left.end = head.end
+        else:
+            # изменения больше, чем в одном регионе
+            left.end = new_region.start - 1
+            right.start = new_region.end + 1
 
         self.file_regions.insert(new_region.index, new_region)
 
@@ -200,23 +227,60 @@ class FileModel:
 
         return new_region.index
 
-    def _fix_bounds(self, new_region: FileRegion,
-                    left: FileRegion, right: FileRegion) -> None:
-        if left == right and new_region.start == left.start:
-            # замена была с начала региона
-            left.start = new_region.end + 1
-        elif left == right and new_region.end == right.end:
-            # замена была до конца региона
-            left.end = new_region.start - 1
+    def _remove_intermediate_regions(self, start: int, end: int) -> tuple:
+        """Удаляет регионы, целиком находящиеся в отрезке [start; end].
+        Возвращает первый и последний регионы, что не были удалены.
+        Если бы удален весь файл, возвращает None, None"""
+        left = self.search_region(start)
+        to_delete = left.index
+        while (to_delete < len(self.file_regions)
+               and end >= self.file_regions[to_delete].end):
+            if start <= self.file_regions[to_delete].start:
+                self.file_regions.pop(to_delete)
+            else:
+                to_delete += 1
+        if not self.file_regions:
+            return None, None
+
+        return left, self.file_regions[to_delete]
+
+    def remove(self, offset: int, count: int) -> None:
+        remove_end = max(offset + count - 1, 0)
+        left, right = self._remove_intermediate_regions(offset, remove_end)
+        if not self.file_regions:
+            # граничный случай, был удален весь файл
+            self.file_regions = [EditedFileRegion(0, b'', 0)]
+            return
+        is_left_removed = offset <= left.start and left.end <= remove_end
+
+        is_left_truncated = False
+        # корректируем границы смежных с новым регионов
+        if left == right and offset == left.start:
+            # изменения с начала региона
+            is_left_truncated = True
+            left.start += count
+        elif left == right and remove_end == right.end:
+            # изменения до конца региона
+            left.end -= count
         elif left == right:
-            # замена была в середине региона
-            head, tail = left.split(new_region.start, new_region.length)
+            # изменения в середине региона
+            head, tail = left.split(offset, count)
             self.file_regions.insert(tail.index, tail)
             left.end = head.end
         else:
-            # замена была больше, чем в одном регионе
-            left.end = new_region.start - 1
-            right.start = new_region.end + 1
+            # изменения больше, чем в одном регионе
+            left.end = offset - 1
+            right.start = offset + count
+
+        # исправляем границы и индексы
+        if is_left_removed or is_left_truncated:
+            start_from = left.index
+        else:
+            start_from = left.index + 1
+        for i in range(start_from, len(self.file_regions)):
+            self.file_regions[i].move(-count)
+            self.file_regions[i].index = i
+
 
 # TODO
 # 1. linked list?
