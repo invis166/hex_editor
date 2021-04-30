@@ -47,7 +47,7 @@ class FileRegionTestCase(unittest.TestCase):
         self.assertEqual(region.original_start, 0)
         self.assertEqual(region.original_end, 10)
 
-    def test_split_without_offset(self):
+    def test_split(self):
         region = FileRegion(0, 10, 0)
         region.move(8)
         left, right = region.split(15)
@@ -59,6 +59,30 @@ class FileRegionTestCase(unittest.TestCase):
         self.assertEqual(left.original_end, 6)
         self.assertEqual(right.original_start, 7)
         self.assertEqual(right.original_end, 10)
+
+
+class EditedFileRegionTestCase(unittest.TestCase):
+    def test_truncate_start(self):
+        region = EditedFileRegion(0, b'123456789', 0)
+        region.truncate_start(5)
+        self.assertEqual(region.start, 5)
+        self.assertEqual(region.data, b'6789')
+
+    def test_truncate_end(self):
+        region = EditedFileRegion(0, b'123456789', 0)
+        region.truncate_end(5)
+        self.assertEqual(region.end, 3)
+        self.assertEqual(region.data, b'1234')
+
+    def test_split(self):
+        region = EditedFileRegion(0, b'123456789', 0)
+        left, right = region.split(5)
+        self.assertEqual(left.start, 0)
+        self.assertEqual(left.end, 4)
+        self.assertEqual(left.data, b'12345')
+        self.assertEqual(right.start, 5)
+        self.assertEqual(right.end, 8)
+        self.assertEqual(right.data, b'6789')
 
 
 if __name__ == '__main__':
