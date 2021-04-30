@@ -19,9 +19,18 @@ class FileRegion:
         self._start += count
         self._end += count
 
-    @property
-    def start(self):
-        return self._start
+    def split(self, pos: int) -> tuple:
+        """Разбивает текущий регион на два по позиции pos так, что конец левого
+        региона в pos - 1, начало правого в pos, индекс левого равен индексу
+        исходного региона, индекс правого на единицу больше индекса левого"""
+        left = FileRegion(self.start, pos - 1, self.index)
+        left.__set_original_bounds(self.__original_start,
+                                   self.__original_end - (self._end - pos) - 1)
+        right = FileRegion(pos, self.end, self.index + 1)
+        right.__set_original_bounds(self.__original_end - (self._end - pos),
+                                    self.__original_end)
+
+        return left, right
 
     def truncate_start(self, value: int) -> None:
         if value < 0:
@@ -29,10 +38,6 @@ class FileRegion:
 
         self.__original_start += value
         self._start += value
-
-    @property
-    def end(self):
-        return self._end
 
     def truncate_end(self, value: int) -> None:
         if value < 0:
@@ -49,18 +54,13 @@ class FileRegion:
     def original_end(self) -> int:
         return self.__original_end
 
-    def split(self, pos: int) -> tuple:
-        """Разбивает текущий регион на два по позиции pos так, что конец левого
-        региона в pos - 1, начало правого в pos, индекс левого равен индексу
-        исходного региона, индекс правого на единицу больше индекса левого"""
-        left = FileRegion(self.start, pos - 1, self.index)
-        left.__set_original_bounds(self.__original_start,
-                                   self.__original_end - (self._end - pos) - 1)
-        right = FileRegion(pos, self.end, self.index + 1)
-        right.__set_original_bounds(self.__original_end - (self._end - pos),
-                                    self.__original_end)
+    @property
+    def start(self):
+        return self._start
 
-        return left, right
+    @property
+    def end(self):
+        return self._end
 
     @property
     def length(self) -> int:
