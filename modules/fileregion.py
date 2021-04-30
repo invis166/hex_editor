@@ -94,14 +94,14 @@ class EditedFileRegion(FileRegion):
         self.data = data
 
     def truncate_start(self, value: int) -> None:
-        if value < self._start:
+        if value < 0:
             raise ValueError
 
         self.data = self.data[value:]
         self._start += value
 
     def truncate_end(self, value: int) -> None:
-        if value > self._start:
+        if value < 0:
             raise ValueError
 
         self.data = self.data[:len(self.data) - value]
