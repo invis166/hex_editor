@@ -39,7 +39,9 @@ class FileModel:
             left.truncate_end(left.end - new_region.start + 1)
         elif left == right:
             # изменения в середине региона
-            head, tail = left.split(new_region.start, new_region.length)
+            head, tail = left.split(new_region.start)
+            tail.truncate_start(new_region.length)
+
             self.file_regions.insert(tail.index, tail)
             left.truncate_end(left.end - head.start - 1)
         else:
@@ -103,7 +105,8 @@ class FileModel:
             left.truncate_end(count)
         elif left == right:
             # изменения в середине региона
-            head, tail = left.split(offset, count)
+            head, tail = left.split(offset)
+            tail.truncate_start(count)
             self.file_regions.insert(tail.index, tail)
             left.truncate_end(left.end - head.start)
         else:

@@ -49,20 +49,17 @@ class FileRegion:
     def original_end(self) -> int:
         return self.__original_end
 
-    def split(self, pos: int, offset: int = 0) -> tuple:
+    def split(self, pos: int) -> tuple:
         """Разбивает текущий регион на два по позиции pos так, что конец левого
         региона в pos - 1, начало правого в pos, индекс левого равен индексу
-        исходного региона, индекс правого на единицу больше индекса левого.
-        Добавляет к началу правого региона offset, если он передан."""
-        # TODO: разбивка original_end и original_start (IMPORTANT!!!!)
+        исходного региона, индекс правого на единицу больше индекса левого"""
         left = FileRegion(self.start, pos - 1, self.index)
         left.__set_original_bounds(self.__original_start,
                                    self.__original_end - (self._end - pos) - 1)
         right = FileRegion(pos, self.end, self.index + 1)
         right.__set_original_bounds(self.__original_end - (self._end - pos),
                                     self.__original_end)
-        right.truncate_start(offset)
-
+        
         return left, right
 
     @property
@@ -110,11 +107,11 @@ class EditedFileRegion(FileRegion):
         self.data = self.data[:len(self.data) - value]
         self._end -= value
 
-    def split(self, pos: int, offset: int = 0) -> tuple:
+    def split(self, pos: int) -> tuple:
         return EditedFileRegion(self.start,
                                 self.data[:pos - self.start],
                                 self.index), \
-               EditedFileRegion(pos + offset,
+               EditedFileRegion(pos,
                                 self.data[pos - self.start:],
                                 self.index + 1)
 
