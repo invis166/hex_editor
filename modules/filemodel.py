@@ -108,7 +108,7 @@ class FileModel:
             head, tail = left.split(offset)
             tail.truncate_start(count)
             self.file_regions.insert(tail.index, tail)
-            left.truncate_end(left.end - head.start)
+            left.truncate_end(left.end - head.end)
         else:
             # изменения больше, чем в одном регионе
             left.truncate_end(left.end - offset + 1)
