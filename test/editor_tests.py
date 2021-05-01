@@ -15,3 +15,7 @@ class HexEditorOnRealFileTestCase(unittest.TestCase):
         editor.insert(7, b'dfg')
         editor.replace(3, b'abc')
         editor.insert(4, b'12345')
+
+    def test3(self):
+        editor = HexEditor('simple_file.txt')
+        editor.remove(3, 5)
