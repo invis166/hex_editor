@@ -18,8 +18,8 @@ class HexEditor:
     def insert(self, offset: int, data: bytes) -> None:
         self._model.insert(offset, data)
 
-    def remove(self, offset: int, data: bytes) -> None:
-        pass
+    def remove(self, offset: int, count: int) -> None:
+        self._model.remove(offset, count)
 
     def save_changes(self):
         for region in self._model.file_regions:
