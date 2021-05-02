@@ -72,11 +72,13 @@ class HexEditorUI:
         if self.key in control_keys:
             self.handle_cursor()
         elif self.key == 'KEY_NPAGE':
-            if self.current_offset + (self.height - 3) * 16 > self.editor.file_size:
-                return
-            self.current_offset = self.current_offset + (self.height - 3) * 16
+            self._change_offset((self.height - 3) * 16)
+            # if self.current_offset + (self.height - 3) * 16 > self.editor.file_size:
+            #     return
+            # self.current_offset = self.current_offset + (self.height - 3) * 16
         elif self.key == 'KEY_PPAGE':
-            self.current_offset = max(0, self.current_offset - (self.height - 3) * 16)
+            self._change_offset(-(self.height - 3) * 16)
+            # self.current_offset = max(0, self.current_offset - (self.height - 3) * 16)
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -95,14 +97,14 @@ class HexEditorUI:
         self.stdscr.addstr(min(y + 2, self.height - 1), self._offset_str_len + self._bytes_str_len,
                            decoded_str)
 
-    def draw_info_bar(self):
+    def draw_info_bar(self) -> None:
         self.stdscr.attron(curses.color_pair(3))
         self.stdscr.addstr(self.height - 1, 0, self.info_bar)
         self.stdscr.addstr(self.height - 1, len(self.info_bar),
                            " " * (self.width - len(self.info_bar) - 1))
         self.stdscr.attroff(curses.color_pair(3))
 
-    def handle_cursor(self):
+    def handle_cursor(self) -> None:
         dx = dy = 0
         if self.key == 'KEY_LEFT':
             if self._is_cursor_in_bytes():
@@ -134,14 +136,28 @@ class HexEditorUI:
 
         self.cursor_x = min(max(self.cursor_x + dx, self._offset_str_len + 1),
                             self._total_line_len - 1)
-        self.cursor_y = min(max(self.cursor_y + dy, 2), self.height - 2)
+        # self.cursor_y = min(max(self.cursor_y + dy, 2), self.height - 2)
+        if self.cursor_y + dy == self.height - 1:
+            self._change_offset(COLUMNS)
+        elif self.cursor_y + dy <= 1:
+            self._change_offset(-COLUMNS)
+        else:
+            self.cursor_y += dy
+        # self.cursor_y = (self.cursor_y + dy) % (self.height - 1)
 
-    def _is_cursor_in_bytes(self):
+    def _is_cursor_in_bytes(self) -> None:
         return (self._offset_str_len
                 <= self.cursor_x <=
                 self._bytes_str_len + self._offset_str_len - 1)
 
-    def init_colors(self):
+    def _change_offset(self, value: int) -> None:
+        if self.current_offset + value > self.editor.file_size:
+            return
+
+        self.current_offset = max(0, self.current_offset + value)
+
+
+    def init_colors(self) -> None:
         curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
         curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE)
