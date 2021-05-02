@@ -36,7 +36,7 @@ class DataBuffer:
             else:
                 # текущий регион лежит на диске
                 old_position = self._fp.tell()
-                self._fp.seek(self._current_region.original_start)
+                self._fp.seek(self._current_region.original_start + start)
                 self.buffer.extend(self._fp.read(to_read))
                 self._fp.seek(old_position)
             read_total += to_read
