@@ -73,12 +73,8 @@ class HexEditorUI:
             self.handle_cursor()
         elif self.key == 'KEY_NPAGE':
             self._change_offset((self.height - 3) * 16)
-            # if self.current_offset + (self.height - 3) * 16 > self.editor.file_size:
-            #     return
-            # self.current_offset = self.current_offset + (self.height - 3) * 16
         elif self.key == 'KEY_PPAGE':
             self._change_offset(-(self.height - 3) * 16)
-            # self.current_offset = max(0, self.current_offset - (self.height - 3) * 16)
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -136,14 +132,12 @@ class HexEditorUI:
 
         self.cursor_x = min(max(self.cursor_x + dx, self._offset_str_len + 1),
                             self._total_line_len - 1)
-        # self.cursor_y = min(max(self.cursor_y + dy, 2), self.height - 2)
         if self.cursor_y + dy == self.height - 1:
             self._change_offset(COLUMNS)
         elif self.cursor_y + dy <= 1:
             self._change_offset(-COLUMNS)
         else:
             self.cursor_y += dy
-        # self.cursor_y = (self.cursor_y + dy) % (self.height - 1)
 
     def _is_cursor_in_bytes(self) -> None:
         return (self._offset_str_len
