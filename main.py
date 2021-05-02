@@ -1,1 +1,0 @@
-from modules.editor import HexEditor
