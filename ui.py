@@ -42,6 +42,8 @@ class HexEditorUI:
             self.height, self.width = stdscr.getmaxyx()
 
             for y in range(self.height - 1):
+                if self.current_offset + y * COLUMNS > self.editor.file_size:
+                    break
                 self.data = self.editor.get_nbytes(
                     self.current_offset + y * COLUMNS, COLUMNS)
                 self.draw_offset(y)
@@ -57,12 +59,13 @@ class HexEditorUI:
             self.key = stdscr.getkey()
 
     def handle_key(self) -> None:
-        control_keys = {'KEY_UP', 'KEY_DOWN', 'KEY_LEFT',
-                        'KEY_RIGHT'}
+        control_keys = {'KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT'}
         if self.key in control_keys:
             self.handle_cursor()
-        if self.key == 'PAGE_DOWN':
-            self.current_offset = self.height - 1
+        elif self.key == 'KEY_NPAGE':
+            self.current_offset = min(self.current_offset + (self.height - 1) * 16, self.editor.file_size - (self.height - 1) * 16)
+        elif self.key == 'KEY_PPAGE':
+            self.current_offset = max(0, self.current_offset - (self.height - 1) * 16)
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -134,7 +137,7 @@ class HexEditorUI:
 
 
 def main():
-    app = HexEditorUI('alabai.png')
+    app = HexEditorUI('simple_file.txt')
     curses.wrapper(app.main)
 
 
