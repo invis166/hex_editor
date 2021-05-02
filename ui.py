@@ -17,6 +17,7 @@ class HexEditorUI:
         self.height = 0
         self.width = 0
 
+        self.upper_bar = 'Offset(h)  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f   Decoded text'
         self.info_bar = "'q' for exit | 'i' for insert mode | 'r' for replace mode"
         self.separator = ' | '
 
@@ -27,8 +28,11 @@ class HexEditorUI:
                                + self._bytes_str_len \
                                + self._decoded_bytes_str_len
 
+        self.upper_bar_underline = '-' * (self._total_line_len - 9)
+
+
         self.cursor_x = self._offset_str_len + 1
-        self.cursor_y = 0
+        self.cursor_y = 2
 
         self.stdscr: curses.window = None
 
@@ -37,18 +41,23 @@ class HexEditorUI:
         self.init_colors()
 
         while self.key != 'q':
+            stdscr.clear()
             self.handle_key()
 
             self.height, self.width = stdscr.getmaxyx()
 
+            stdscr.addstr(0, 0, self.upper_bar)
+            stdscr.addstr(1, 9, self.upper_bar_underline)
+
             for y in range(self.height - 1):
-                if self.current_offset + y * COLUMNS > self.editor.file_size:
-                    break
+                to_read = min(COLUMNS, self.editor.file_size - self.current_offset - y * COLUMNS)
                 self.data = self.editor.get_nbytes(
-                    self.current_offset + y * COLUMNS, COLUMNS)
+                    self.current_offset + y * COLUMNS, to_read)
                 self.draw_offset(y)
                 self.draw_bytes(y)
                 self.draw_decoded_bytes(y)
+                if self.current_offset + y * COLUMNS + COLUMNS > self.editor.file_size:
+                    break
 
             self.draw_info_bar()
 
@@ -63,25 +72,27 @@ class HexEditorUI:
         if self.key in control_keys:
             self.handle_cursor()
         elif self.key == 'KEY_NPAGE':
-            self.current_offset = min(self.current_offset + (self.height - 1) * 16, self.editor.file_size - (self.height - 1) * 16)
+            if self.current_offset + (self.height - 3) * 16 > self.editor.file_size:
+                return
+            self.current_offset = self.current_offset + (self.height - 3) * 16
         elif self.key == 'KEY_PPAGE':
-            self.current_offset = max(0, self.current_offset - (self.height - 1) * 16)
+            self.current_offset = max(0, self.current_offset - (self.height - 3) * 16)
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
                                            OFFSET_COLUMN_LENGTH,
                                            self.separator)
-        self.stdscr.addstr(y, 0, offset_str)
+        self.stdscr.addstr(min(y + 2, self.height - 1), 0, offset_str)
 
     def draw_bytes(self, y: int) -> None:
         bytes_str = f"{self.data[:COLUMNS // 2].hex(' ')} " \
                     f" {self.data[COLUMNS // 2:].hex(' ')}"
-        self.stdscr.addstr(y, self._offset_str_len, bytes_str)
+        self.stdscr.addstr(min(y + 2, self.height - 1), self._offset_str_len, bytes_str)
 
     def draw_decoded_bytes(self, y) -> None:
         decoded_str = '{}{}'.format(self.separator, ''.join(
             map(lambda x: chr(x) if 0x20 <= x <= 0x7e else '.', self.data)))
-        self.stdscr.addstr(y, self._offset_str_len + self._bytes_str_len,
+        self.stdscr.addstr(min(y + 2, self.height - 1), self._offset_str_len + self._bytes_str_len,
                            decoded_str)
 
     def draw_info_bar(self):
@@ -123,7 +134,7 @@ class HexEditorUI:
 
         self.cursor_x = min(max(self.cursor_x + dx, self._offset_str_len + 1),
                             self._total_line_len - 1)
-        self.cursor_y = min(max(self.cursor_y + dy, 0), self.height - 1 - 1)
+        self.cursor_y = min(max(self.cursor_y + dy, 2), self.height - 2)
 
     def _is_cursor_in_bytes(self):
         return (self._offset_str_len
@@ -137,7 +148,7 @@ class HexEditorUI:
 
 
 def main():
-    app = HexEditorUI('simple_file.txt')
+    app = HexEditorUI('ui.py')
     curses.wrapper(app.main)
 
 
