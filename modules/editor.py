@@ -38,6 +38,10 @@ class HexEditor:
     def exit(self):
         self._fp.close()
 
+    @property
+    def file_size(self) -> int:
+        return self._model.file_size
+
     def __del__(self):
         self.exit()
 
