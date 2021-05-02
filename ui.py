@@ -134,7 +134,7 @@ class HexEditorUI:
 
 
 def main():
-    app = HexEditorUI('simple_file.txt')
+    app = HexEditorUI('alabai.png')
     curses.wrapper(app.main)
 
 
