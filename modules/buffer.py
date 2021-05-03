@@ -27,8 +27,8 @@ class DataBuffer:
 
         read_total = 0
         while read_total < count:  # read_total есть len(buffer)
-            to_read = min(self._current_region.length, count - read_total)
             start = max(0, offset - self._current_region.start)
+            to_read = min(self._current_region.length - start, count - read_total)
             if isinstance(self._current_region, EditedFileRegion):
                 # текущий регион был изменен и лежит в памяти
                 self.buffer.extend(self._current_region.get_nbytes(start,
