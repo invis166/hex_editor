@@ -34,7 +34,7 @@ class HexEditorUI:
         self.width = 0
 
         self.upper_bar = 'Offset(h)  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f   Decoded text'
-        self.info_bar = "'q' for exit | 'i' for insert mode | 'r' for replace mode"
+        self.info_bar = "'q' for exit | 'i' for insert mode | 'r' for replace mode | page up | page down"
         self.separator = ' | '
 
         self._offset_str_len = OFFSET_COLUMN_LENGTH + len(self.separator)
