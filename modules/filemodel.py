@@ -65,15 +65,13 @@ class FileModel:
         if offset == previous.start:
             # вставка будет перед предыдущим регионом
             new_region_index = previous.index
-            new_region_start = previous.start
         else:
             # вставка будет в середине предыдущего региона
             new_region_index = previous.index + 1
-            new_region_start = offset
             head, tail = previous.split(offset)
             previous.truncate_end(tail.length)
             self.file_regions.insert(tail.index, tail)
-        new_region = EditedFileRegion(new_region_start,
+        new_region = EditedFileRegion(offset,
                                       data,
                                       new_region_index)
 
