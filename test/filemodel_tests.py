@@ -137,7 +137,6 @@ class FileModelTestCase(unittest.TestCase):
                          is_removing=True)
 
     def test_remove_in_middle_2(self):
-        # remove(3, 5)
         self.model.remove(8, 2)
         self._basic_test(region_index=1, offset=6,
                          data=[0, 1], expected_length=5,
