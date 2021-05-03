@@ -40,10 +40,11 @@ class FileModel:
         elif left == right:
             # изменения в середине региона
             head, tail = left.split(new_region.start)
+            left.truncate_end(tail.length)
             tail.truncate_start(new_region.length)
 
             self.file_regions.insert(tail.index, tail)
-            left.truncate_end(left.end - head.start - 1)
+            # left.truncate_end(left.end - head.end - 1)
         else:
             # изменения больше, чем в одном регионе
             left.truncate_end(left.end - new_region.start + 1)
