@@ -19,3 +19,8 @@ class HexEditorOnRealFileTestCase(unittest.TestCase):
     def test3(self):
         editor = HexEditor('simple_file.txt')
         editor.remove(3, 5)
+
+    def test4(self):
+        editor = HexEditor('../ui.py')
+        editor.replace(67, b'\x00')
+        editor.get_nbytes(60, 10)
