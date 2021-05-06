@@ -1,11 +1,16 @@
 import curses
+import logging
 
 from modules.editor import HexEditor
+
+
+logging.basicConfig(filename='log.log', level=logging.DEBUG)
 
 OFFSET_COLUMN_LENGTH = 8
 COLUMNS = 16
 
-ENTER = 10
+ENTER_KEY = 10
+ESCAPE_KEY = 27
 
 
 def str_to_bytes(value: str) -> bytes:
@@ -60,24 +65,25 @@ class HexEditorUI:
 
         while self.key != ord('q'):
             self.handle_key()
+            self.stdscr.clear()
             self.draw()
 
             self.key = stdscr.getch()
 
     def draw(self):
-        self.stdscr.clear()
-
         self.stdscr.addstr(0, 0, self.upper_bar)
         self.stdscr.addstr(1, 9, self.upper_bar_underline)
-        for y in range(self.height - 1):
+        for line in range(self.height - 1):
             to_read = min(COLUMNS,
-                          self.editor.file_size - self.current_offset - y * COLUMNS)
+                          self.editor.file_size
+                          - self.current_offset
+                          - line * COLUMNS)
             self.data = self.editor.get_nbytes(
-                self.current_offset + y * COLUMNS, to_read)
-            self.draw_offset(y)
-            self.draw_bytes(y)
-            self.draw_decoded_bytes(y)
-            if self.current_offset + y * COLUMNS + COLUMNS > self.editor.file_size:
+                self.current_offset + line * COLUMNS, to_read)
+            self.draw_offset(line)
+            self.draw_bytes(line)
+            self.draw_decoded_bytes(line)
+            if self.current_offset + line * COLUMNS + COLUMNS > self.editor.file_size:
                 break
         self.draw_info_bar()
         self.stdscr.move(self.cursor_y, self.cursor_x)
@@ -95,6 +101,8 @@ class HexEditorUI:
             self._change_offset(-(self.height - 3) * 16)
         elif self.key == ord('r'):
             self.handle_replace()
+        elif self.key == ord('i'):
+            self.handle_insert()
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -142,8 +150,7 @@ class HexEditorUI:
             if self.cursor_x < self._total_line_len - 1:
                 self._x_offset = (self._x_offset + 1) % COLUMNS
             if self._is_cursor_in_bytes():
-                if (
-                        self.cursor_x == COLUMNS + COLUMNS // 2 - 2 + self._offset_str_len
+                if (self.cursor_x == COLUMNS + COLUMNS // 2 - 2 + self._offset_str_len
                         or self.cursor_x == self._offset_str_len + self._bytes_str_len - 1):
                     # прыгаем через два пробела между блоками по 8 байт или
                     # через разделитель после блока байт
@@ -174,6 +181,54 @@ class HexEditorUI:
         else:
             self._handle_replace_decoded()
 
+    def handle_insert(self):
+        if self._is_cursor_in_bytes():
+            self._handle_insert_bytes()
+        else:
+            self._handle_insert_decoded()
+
+    def _handle_insert_bytes(self) -> None:
+        while not is_correct_symbol(first_key := self.stdscr.getkey()):
+            pass
+        self.editor.insert(self._get_file_offset(), str_to_bytes(first_key))
+        self.stdscr.clear()
+        self.draw()
+
+        second_key = self.stdscr.getch()
+        if second_key == ENTER_KEY:
+            return
+        elif second_key == ESCAPE_KEY:
+            self.editor.remove(self._get_file_offset(), 1)
+            return
+        else:
+            second_key = chr(second_key)
+            while not is_correct_symbol(second_key):
+                second_key = self.stdscr.getkey()
+            self.editor._model.search_region(self._get_file_offset()).data = str_to_bytes(first_key + second_key)
+            self.stdscr.clear()
+            self.draw()
+
+        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
+            pass
+        if last_key == ENTER_KEY:
+            return
+        elif last_key == ESCAPE_KEY:
+            self.editor.remove(self._get_file_offset(), 1)
+
+
+    def _handle_insert_decoded(self) -> None:
+        first_key = self.stdscr.getkey()
+        self.editor.insert(self._get_file_offset(), first_key.encode())
+        self.stdscr.clear()
+        self.draw()
+
+        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
+            pass
+        if last_key == ENTER_KEY:
+            return
+        elif last_key == ESCAPE_KEY:
+            self.editor.remove(self._get_file_offset(), 1)
+
     def _is_cursor_in_bytes(self) -> bool:
         return (self._offset_str_len
                 <= self.cursor_x <=
@@ -188,7 +243,7 @@ class HexEditorUI:
     def _get_file_offset(self) -> int:
         return self.current_offset + (self.cursor_y - 2) * 16 + self._x_offset
 
-    def _handle_replace_bytes(self):
+    def _handle_replace_bytes(self) -> None:
         before = self.stdscr.inch(self.cursor_y, self.cursor_x - 1) \
                  + self.stdscr.inch(self.cursor_y, self.cursor_x)
 
@@ -199,9 +254,12 @@ class HexEditorUI:
         self.stdscr.refresh()
 
         second_key = self.stdscr.getch()
-        if second_key == ENTER:
+        if second_key == ENTER_KEY:
             self.editor.replace(self._get_file_offset(),
                                 str_to_bytes(first_key))
+            return
+        elif second_key == ESCAPE_KEY:
+            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
             return
         else:
             second_key = chr(second_key)
@@ -211,14 +269,15 @@ class HexEditorUI:
             self.stdscr.addstr(self.cursor_y, self.cursor_x, second_key)
 
         self.stdscr.move(self.cursor_y, self.cursor_x)
-        last_key = self.stdscr.getch()
-        if last_key == ENTER:
+        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
+            pass
+        if last_key == ENTER_KEY:
             self.editor.replace(self._get_file_offset(),
                                 str_to_bytes(first_key + second_key))
-        elif last_key == 27:  # ESC
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, before)
+        elif last_key == ESCAPE_KEY:
+            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
 
-    def _handle_replace_decoded(self):
+    def _handle_replace_decoded(self) -> None:
         before = self.stdscr.inch(self.cursor_y, self.cursor_x)
 
         first_key = self.stdscr.getkey()
@@ -226,11 +285,12 @@ class HexEditorUI:
         self.stdscr.refresh()
 
         self.stdscr.move(self.cursor_y, self.cursor_x)
-        second_key = self.stdscr.getch()
-        if second_key == ENTER:
+        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
+            pass
+        if last_key == ENTER_KEY:
             self.editor.replace(self._get_file_offset(), first_key.encode())
-        elif second_key == 27:  # ESC
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, before)
+        elif last_key == ESCAPE_KEY:
+            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
 
 
 def main():
