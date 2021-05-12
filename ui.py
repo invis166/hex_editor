@@ -104,6 +104,13 @@ class HexEditorUI:
             self.handle_replace()
         elif self.key == ord('i'):
             self.handle_insert()
+        elif self.key == 330:  # delete
+            return
+            self.handle_delete()
+        elif self.key == 8:  # backspace
+            self.handle_backspace()
+        else:
+            logging.log(level=logging.DEBUG, msg=f'unknown key {self.key}')
 
     def draw_label(self) -> None:
         if self._is_cursor_in_bytes():
@@ -118,8 +125,6 @@ class HexEditorUI:
             second = self.stdscr.inch(self.cursor_y, x_coord)
             self.stdscr.addch(self.cursor_y, x_coord - 1, first, curses.color_pair(2))
             self.stdscr.addch(self.cursor_y, x_coord, second, curses.color_pair(2))
-
-
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -203,6 +208,14 @@ class HexEditorUI:
             self._handle_insert_bytes()
         else:
             self._handle_insert_decoded()
+
+    def handle_delete(self) -> None:
+        self.editor.remove(self._get_file_offset(), 1)
+
+    def handle_backspace(self) -> None:
+        self.editor.remove(max(self._get_file_offset() - 1, 0), 1)
+        self.key = curses.KEY_LEFT
+        self.handle_cursor()
 
     def _is_cursor_in_bytes(self) -> bool:
         return (self._offset_str_len
