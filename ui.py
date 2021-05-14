@@ -105,10 +105,12 @@ class HexEditorUI:
         elif self.key == ord('i'):
             self.handle_insert()
         elif self.key == 330:  # delete
-            return
             self.handle_delete()
         elif self.key == 8:  # backspace
+            return
             self.handle_backspace()
+        elif self.key == 19:  # Ctrl + S
+            self.editor.save_changes()
         else:
             logging.log(level=logging.DEBUG, msg=f'unknown key {self.key}')
 
@@ -170,7 +172,10 @@ class HexEditorUI:
                 dx = -1
         elif self.key == curses.KEY_RIGHT:
             if self.cursor_x < self._total_line_len - 1:
+                if self._get_file_offset() + 1 == self.editor.file_size:
+                    return
                 self._x_offset = (self._x_offset + 1) % COLUMNS
+
             if self._is_cursor_in_bytes():
                 if (self.cursor_x == COLUMNS + COLUMNS // 2 - 2 + self._offset_str_len
                         or self.cursor_x == self._offset_str_len + self._bytes_str_len - 1):
@@ -184,6 +189,8 @@ class HexEditorUI:
         elif self.key == curses.KEY_UP:
             dy = -1
         elif self.key == curses.KEY_DOWN:
+            if self._get_file_offset() + COLUMNS + 1 > self.editor.file_size:
+                return
             dy = 1
 
         self.cursor_x = min(max(self.cursor_x + dx, self._offset_str_len + 1),
@@ -323,7 +330,7 @@ class HexEditorUI:
 
 
 def main():
-    app = HexEditorUI('ui.py')
+    app = HexEditorUI('simple_file.txt')
     curses.wrapper(app.main)
 
 
