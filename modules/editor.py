@@ -5,7 +5,7 @@ from modules.filemodel import FileModel, FileRegion, EditedFileRegion
 
 class HexEditor:
     def __init__(self, filename: str):
-        self._fp = open(filename, 'r+b')
+        self._fp = open(filename, 'rb')
         self._model = FileModel(os.path.getsize(filename))
         self._buffer = DataBuffer(self._model, self._fp)
 
