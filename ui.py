@@ -106,11 +106,12 @@ class HexEditorUI:
             self.handle_insert()
         elif self.key == 330:  # delete
             self.handle_delete()
-        elif self.key == 8:  # backspace
-            return
-            self.handle_backspace()
-        elif self.key == 19:  # Ctrl + S
+        elif self.key == 115:  # S
             self.editor.save_changes()
+        elif self.key == 262:  # home
+            self._change_offset(0)
+        elif self.key == 358:  # end
+            self._change_offset(self.editor.file_size - (self.height - 3) * 16)
         else:
             logging.log(level=logging.DEBUG, msg=f'unknown key {self.key}')
 
