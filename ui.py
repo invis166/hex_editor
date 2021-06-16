@@ -46,9 +46,11 @@ class HexEditorUI:
         self.height = 0
         self.width = 0
 
+        self._is_in_help = False
+
         self.upper_bar = 'Offset(h)  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f   Decoded text'
         self.current_mode = 'view'
-        self.info_bar = f'current mode: {self.current_mode}'
+        self.info_bar = 'current mode: {} | h for help'
         self.separator = ' | '
 
         self._offset_str_len = OFFSET_COLUMN_LENGTH + len(self.separator)
@@ -82,6 +84,7 @@ class HexEditorUI:
             self.key = stdscr.getch()
 
     def draw(self) -> None:
+        self._is_in_help = False
         self.stdscr.addstr(0, 0, self.upper_bar)
         self.stdscr.addstr(1, 9, self.upper_bar_underline)
         for line in range(self.height - 1):
@@ -98,6 +101,9 @@ class HexEditorUI:
                 break
         self.draw_info_bar()
         self.draw_label()
+        if self.key == ord('h'):
+            self.handle_help()
+
         self.stdscr.move(self.cursor_y, self.cursor_x)
 
         self.stdscr.refresh()
@@ -113,8 +119,12 @@ class HexEditorUI:
             self._increment_offset(-self.bytes_rows * 16)
         elif self.key == ord('a'):
             self.current_mode = 'append'
+        elif self.key == ord('v'):
+            self.current_mode = 'view'
         elif self.key == ord('h'):
-            self.handle_help()
+            if self._is_in_help:
+                self.key = -1
+                self._is_in_help = False
         elif self.key == ord('r'):
             self.handle_replace()
         elif self.key == ord('i'):
@@ -167,11 +177,11 @@ class HexEditorUI:
                            decoded_str)
 
     def draw_info_bar(self) -> None:
-        self.info_bar = f'current mode: {self.current_mode}'
+        bar = self.info_bar.format(self.current_mode)
         self.stdscr.attron(curses.color_pair(3))
-        self.stdscr.addstr(self.height - 1, 0, self.info_bar)
-        self.stdscr.addstr(self.height - 1, len(self.info_bar),
-                           " " * (self.width - len(self.info_bar) - 1))
+        self.stdscr.addstr(self.height - 1, 0, bar)
+        self.stdscr.addstr(self.height - 1, len(bar),
+                           " " * (self.width - len(bar) - 1))
         self.stdscr.attroff(curses.color_pair(3))
 
     def handle_cursor(self) -> None:
@@ -350,7 +360,15 @@ class HexEditorUI:
             self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
 
     def handle_help(self) -> None:
-        
+        self._is_in_help = True
+        lines = help_menu.split('\n')
+        max_line_len = max(len(line) for line in lines)
+        self.stdscr.attron(curses.color_pair(3))
+        for i, line in enumerate(lines):
+            logging.log(msg=line, level=logging.DEBUG)
+            self.stdscr.addstr(2 + i, self._offset_str_len,
+                               line + " " * (max_line_len - len(line)))
+        self.stdscr.attroff(curses.color_pair(3))
 
 
 def main():
