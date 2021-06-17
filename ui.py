@@ -2,6 +2,7 @@ import logging
 import argparse
 import sys
 import curses
+from itertools import count
 
 from modules.editor import HexEditor
 
@@ -30,7 +31,7 @@ help_menu = "'a' for append mode\n'v' for view mode\n's' for save" \
 
 
 def str_to_bytes(value: str) -> bytes:
-    return int.to_bytes(int(value, 16), 1, 'little')
+    return bytes([int(value[i: i + 2], 16) for i in range(0, len(value), 2)])
 
 
 def is_correct_hex_symbol(value: str) -> bool:
@@ -141,12 +142,14 @@ class HexEditorUI:
             self.handle_replace()
         elif self.key == ord('i'):
             self.handle_insert()
-        elif self.key == DELETE_KEY:
-            self.handle_delete()
         elif self.key == ord('g'):
             self.handle_goto()
         elif self.key == ord('s'):
             self.editor.save_changes()
+        elif self.key == ord('f'):
+            self.handle_search()
+        elif self.key == DELETE_KEY:
+            self.handle_delete()
         elif self.key == HOME_KEY:
             self._increment_offset(-self.current_offset)
         elif self.key == END_KEY:
@@ -395,7 +398,28 @@ class HexEditorUI:
         self.bottom_bar = default_bottom_bar.format(self.current_mode)
 
     def handle_search(self) -> None:
-        pass
+        input = []
+        self.bottom_bar = 'search (h): '
+        self.draw_bottom_bar()
+        counter = count()
+        for symbol in self.get_user_input(filter=is_correct_hex_symbol):
+            if next(counter) % 2 - 1:
+                input.append('0')
+                self.bottom_bar += '0'
+            else:
+                del input[-2]
+                self.bottom_bar = self.bottom_bar[:-2] + self.bottom_bar[-1]
+            input.append(symbol)
+            self.bottom_bar += symbol
+            self.draw_bottom_bar()
+        query = ''.join(input)
+        logging.log(msg=f'trying to find {str_to_bytes(query)}', level=logging.DEBUG)
+        if (offset := self.editor.search(str_to_bytes(query))) == -1:
+            logging.log(msg=f'query {query} not found', level=logging.DEBUG)
+            self.bottom_bar = 'not found'
+            return
+        logging.log(msg=f'found at offset {offset}', level=logging.DEBUG)
+        self.current_offset = offset - offset % COLUMNS
 
     def get_user_input(self, filter=lambda x: True) -> str:
         while (key := self.stdscr.getkey()) != '\n':
@@ -406,7 +430,7 @@ class HexEditorUI:
 def main():
     parser = argparse.ArgumentParser(description="Hex editor")
     # app = HexEditorUI(sys.argv[1])
-    app = HexEditorUI('simple_file.txt')
+    app = HexEditorUI('alabai.png')
     curses.wrapper(app.main)
 
 

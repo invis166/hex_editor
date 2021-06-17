@@ -4,8 +4,11 @@ from modules.filemodel import FileModel, FileRegion, EditedFileRegion
 
 
 class HexEditor:
-    def __init__(self, filename: str):
-        self._fp = open(filename, 'r+b')
+    def __init__(self, filename: str, is_readonly=False):
+        if is_readonly:
+            self._fp = open(filename, 'rb')
+        else:
+            self._fp = open(filename, 'r+b')
         self._model = FileModel(os.path.getsize(filename))
         self._buffer = DataBuffer(self._model, self._fp)
 
@@ -34,6 +37,28 @@ class HexEditor:
 
         self._model = FileModel(self._model.file_size)
         self._buffer._file_model = self._model
+
+    def search(self, query: bytes) -> int:
+        """Поиск подстроки в строке через полиномиальный хэш"""
+        # нет проверки на длину входных данных
+        p = 1000
+        max_power = p ** (len(query) - 1)
+        query_hash = 0
+        substring_hash = 0
+        for i in range(len(query)):
+            query_hash = query_hash * p + query[i]
+            substring_hash = substring_hash * p + self.get_nbytes(i, 1)[0]
+
+        for i in range(len(query), self.file_size + 1):
+            if query_hash == substring_hash:
+                if query == self.get_nbytes(i - len(query), len(query)):
+                    return i - len(query)
+            if i == self.file_size:
+                return -1
+            substring_hash -= max_power * self.get_nbytes(i - len(query), 1)[0]
+            substring_hash = substring_hash * p + self.get_nbytes(i, 1)[0]
+
+        return -1
 
     def exit(self):
         self._fp.close()
