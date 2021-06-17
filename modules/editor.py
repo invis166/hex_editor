@@ -5,6 +5,7 @@ from modules.filemodel import FileModel, FileRegion, EditedFileRegion
 
 class HexEditor:
     def __init__(self, filename: str, is_readonly=False):
+        self.filename = filename
         if is_readonly:
             self._fp = open(filename, 'rb')
         else:
@@ -24,19 +25,27 @@ class HexEditor:
     def remove(self, offset: int, count: int) -> None:
         self._model.remove(offset, count)
 
-    def save_changes(self):
+    def save_changes(self, filename: str):
+        if filename != self.filename:
+            # сохраняем в другой файл
+            fp = open(filename, 'wb')
+        else:
+            fp = self._fp
         for region in self._model.file_regions:
             if isinstance(region, EditedFileRegion):
-                self._fp.seek(region.start)
-                self._fp.write(region.data)
+                fp.seek(region.start)
+                fp.write(region.data)
             elif (region.original_start != region.start
                   or region.original_end != region.end):
-                self._fp.seek(region.start)
-                self._fp.write(self.get_nbytes(region.start, region.length))
-        self._fp.flush()
+                fp.seek(region.start)
+                fp.write(self.get_nbytes(region.start, region.length))
+        fp.flush()
 
-        self._model = FileModel(self._model.file_size)
-        self._buffer._file_model = self._model
+        if filename != self.filename:
+            fp.close()
+        else:
+            self._model = FileModel(self._model.file_size)
+            self._buffer._file_model = self._model
 
     def search(self, query: bytes) -> int:
         """Поиск подстроки в строке через полиномиальный хэш"""

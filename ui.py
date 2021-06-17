@@ -213,10 +213,11 @@ class HexEditorUI:
         for symbol in self.get_user_input():
             if ord(symbol) == 8 and len(filename):
                 filename.pop()
-            else:
+            elif ord(symbol) != 8:
                 filename.append(symbol)
             self.bottom_bar = ''.join(filename)
             self.draw_bottom_bar()
+        self.editor.save_changes(''.join(filename))
         self._bottom_bar_draw_queue.append('saved')
 
     def handle_cursor(self) -> None:
