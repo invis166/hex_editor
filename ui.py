@@ -24,7 +24,7 @@ END_KEY = 358
 default_bottom_bar = 'current mode: {} | h for help'
 default_upper_bar = 'Offset(h)  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f' \
             '   Decoded text'
-help_menu = "'a' for append mode\n'v' for view mode\n's' for save" \
+help_menu = "'a' for insert mode\n'v' for view mode\n's' for save" \
             "\n'page up', 'page_down', 'home', 'end', arrows for navigation" \
             "\n'g' for goto\n'f' for find" \
             "\n'h' for open(close) help\n'q' for quit"
@@ -49,11 +49,13 @@ class HexEditorUI:
         self.editor = HexEditor(filename)
 
         self.data = b''
+        self.filename = filename
+
         self.current_offset = 0  # смещение, соответствующее первому байту на экране
         self.key = -1
-
         self.height = 0
         self.width = 0
+        self.bytes_rows = 0
 
         self._is_in_help = False
 
@@ -62,14 +64,14 @@ class HexEditorUI:
         self.upper_bar = default_upper_bar
         self.bottom_bar = default_bottom_bar.format(self.current_mode)
 
+        self._bottom_bar_draw_queue = []
+
         self._offset_str_len = OFFSET_COLUMN_LENGTH + len(self.separator)
         self._bytes_str_len = COLUMNS * 2 + COLUMNS
         self._decoded_bytes_str_len = len(self.separator) + COLUMNS
         self._total_line_len = (self._offset_str_len
                                 + self._bytes_str_len
                                 + self._decoded_bytes_str_len)
-        self.bytes_rows = 0
-
         self.upper_bar_underline = '-' * (self._total_line_len - 9)
 
         self.cursor_x = self._offset_str_len + 1
@@ -108,6 +110,10 @@ class HexEditorUI:
             self.draw_decoded_bytes(line)
             if self.current_offset + line * COLUMNS + COLUMNS > self.editor.file_size:
                 break
+        if self._bottom_bar_draw_queue:
+            self.bottom_bar = self._bottom_bar_draw_queue.pop()
+        else:
+            self.bottom_bar = default_bottom_bar.format(self.current_mode)
         self.draw_bottom_bar()
         self.draw_label()
         if self.key == ord('h'):
@@ -145,7 +151,7 @@ class HexEditorUI:
         elif self.key == ord('g'):
             self.handle_goto()
         elif self.key == ord('s'):
-            self.editor.save_changes()
+            self.handle_save()
         elif self.key == ord('f'):
             self.handle_search()
         elif self.key == DELETE_KEY:
@@ -199,6 +205,19 @@ class HexEditorUI:
         self.stdscr.addstr(self.height - 1, len(self.bottom_bar),
                            " " * (self.width - len(self.bottom_bar) - 1))
         self.stdscr.attroff(curses.color_pair(3))
+
+    def handle_save(self) -> None:
+        self.bottom_bar = self.filename
+        self.draw_bottom_bar()
+        filename = list(self.filename)
+        for symbol in self.get_user_input():
+            if ord(symbol) == 8 and len(filename):
+                filename.pop()
+            else:
+                filename.append(symbol)
+            self.bottom_bar = ''.join(filename)
+            self.draw_bottom_bar()
+        self._bottom_bar_draw_queue.append('saved')
 
     def handle_cursor(self) -> None:
         dx = dy = 0
@@ -269,6 +288,19 @@ class HexEditorUI:
         self.editor.remove(max(self._get_cursor_offset() - 1, 0), 1)
         self.key = curses.KEY_LEFT
         self.handle_cursor()
+
+    def _convert_offset_to_x_pos(self, offset) -> int:
+        offset = offset % 16
+        if self._is_cursor_in_bytes():
+            return self._offset_str_len + offset * 3 + offset // 8 + 1
+        else:
+            return self._offset_str_len \
+                   + self._bytes_str_len \
+                   + offset + len(self.separator)
+
+    def _move_cursor_to_offset(self, offset):
+        self.cursor_x = self._convert_offset_to_x_pos(offset)
+        self._x_offset = offset % 16
 
     def _is_cursor_in_bytes(self) -> bool:
         return (self._offset_str_len
@@ -386,44 +418,60 @@ class HexEditorUI:
         self.stdscr.attroff(curses.color_pair(3))
 
     def handle_goto(self) -> None:
-        offset = ''
+        user_input = []
         self.bottom_bar = 'goto (h): '
         self.draw_bottom_bar()
         for symbol in self.get_user_input(filter=is_correct_hex_symbol):
-            logging.log(msg=symbol, level=logging.DEBUG)
-            self.bottom_bar += symbol
-            offset += symbol
+            if ord(symbol) == 8 and len(user_input):
+                user_input.pop()
+            elif ord(symbol) != 8:
+                user_input.append(symbol)
+            self.bottom_bar = f'goto (h): {"".join(user_input)}'
             self.draw_bottom_bar()
-        self._increment_offset(int(offset, 16) - self.current_offset)
-        self.bottom_bar = default_bottom_bar.format(self.current_mode)
+        offset = int("".join(user_input), 16)
+        self._increment_offset((offset - offset % 16) - self.current_offset)
+        self._move_cursor_to_offset(offset)
 
     def handle_search(self) -> None:
-        input = []
+        user_input = []
         self.bottom_bar = 'search (h): '
         self.draw_bottom_bar()
         counter = count()
         for symbol in self.get_user_input(filter=is_correct_hex_symbol):
             if next(counter) % 2 - 1:
-                input.append('0')
-                self.bottom_bar += '0'
+                if ord(symbol) == 8 and len(user_input) >= 2:
+                    user_input[-1] = user_input[-2]
+                    user_input[-2] = '0'
+                    next(counter)
+                elif ord(symbol) != 8:
+                    user_input.append('0')
+                    user_input.append(symbol)
             else:
-                del input[-2]
-                self.bottom_bar = self.bottom_bar[:-2] + self.bottom_bar[-1]
-            input.append(symbol)
-            self.bottom_bar += symbol
+                if ord(symbol) == 8 and len(user_input) >= 2:
+                    del user_input[-2:]
+                    next(counter)
+                elif ord(symbol) != 8:
+                    del user_input[-2]
+                    user_input.append(symbol)
+            self.bottom_bar = f'search (h): {"".join(user_input)}'
             self.draw_bottom_bar()
-        query = ''.join(input)
+
+        query = ''.join(user_input)
         logging.log(msg=f'trying to find {str_to_bytes(query)}', level=logging.DEBUG)
         if (offset := self.editor.search(str_to_bytes(query))) == -1:
             logging.log(msg=f'query {query} not found', level=logging.DEBUG)
-            self.bottom_bar = 'not found'
+            self._bottom_bar_draw_queue.append('not found')
             return
         logging.log(msg=f'found at offset {offset}', level=logging.DEBUG)
         self.current_offset = offset - offset % COLUMNS
+        self._move_cursor_to_offset(offset)
 
     def get_user_input(self, filter=lambda x: True) -> str:
+        """Считывает пользовательский ввод до нажатия enter. Если передан
+           filter, то считывает только символы, удовлетворяющие filter
+           и кнопку backspace"""
         while (key := self.stdscr.getkey()) != '\n':
-            if filter(key):
+            if filter(key) or ord(key) == 8:
                 yield key
 
 
