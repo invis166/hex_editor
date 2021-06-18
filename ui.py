@@ -2,10 +2,9 @@ import logging
 import argparse
 import sys
 import curses
-from itertools import count
+import itertools
 
 from modules.editor import HexEditor
-
 
 logging.basicConfig(filename='log.log', level=logging.DEBUG)
 
@@ -15,15 +14,20 @@ VIEW_MODE = 'view'
 OFFSET_COLUMN_LENGTH = 8
 COLUMNS = 16
 
+BACKSPACE_KEY = 8
 ENTER_KEY = 10
 ESCAPE_KEY = 27
 DELETE_KEY = 330
 HOME_KEY = 262
 END_KEY = 358
 
+CONTROL_KEYS = {
+    curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT,
+}
+
 default_bottom_bar = 'current mode: {} | h for help'
 default_upper_bar = 'Offset(h)  00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f' \
-            '   Decoded text'
+                    '   Decoded text'
 help_menu = "'a' for insert mode\n'v' for view mode\n's' for save" \
             "\n'page up', 'page_down', 'home', 'end', arrows for navigation" \
             "\n'g' for goto\n'f' for find" \
@@ -34,8 +38,12 @@ def str_to_bytes(value: str) -> bytes:
     return bytes([int(value[i: i + 2], 16) for i in range(0, len(value), 2)])
 
 
-def is_correct_hex_symbol(value: str) -> bool:
-    return 'a' <= value <= 'f' or '0' <= value <= '9'
+def is_correct_hex_symbol(value: int) -> bool:
+    return 'a' <= chr(value) <= 'f' or '0' <= chr(value) <= '9'
+
+
+def is_correct_hex_symbol_or_backspace(value: int) -> bool:
+    return is_correct_hex_symbol(value) or value == BACKSPACE_KEY
 
 
 def init_colors() -> None:
@@ -45,8 +53,8 @@ def init_colors() -> None:
 
 
 class HexEditorUI:
-    def __init__(self, filename: str):
-        self.editor = HexEditor(filename)
+    def __init__(self, filename: str, is_readonly=False):
+        self.editor = HexEditor(filename, is_readonly)
 
         self.data = b''
         self.filename = filename
@@ -124,38 +132,30 @@ class HexEditorUI:
         self.stdscr.refresh()
 
     def handle_key(self) -> None:
-        control_keys = {curses.KEY_UP, curses.KEY_DOWN,
-                        curses.KEY_LEFT, curses.KEY_RIGHT}
-        if self.key in control_keys:
+        if self.key in CONTROL_KEYS:
             self.handle_cursor()
-        # elif self.current_mode == INSERT_MODE:
-        #     pass
+        elif self.current_mode == INSERT_MODE:
+            self.handle_insert_mode()
         elif self.key == curses.KEY_NPAGE:
             self._increment_offset(self.bytes_rows * 16)
         elif self.key == curses.KEY_PPAGE:
             self._increment_offset(-self.bytes_rows * 16)
         elif self.key == ord('a'):
             self.current_mode = INSERT_MODE
-            self.bottom_bar = default_bottom_bar.format(self.current_mode)
+            # self.bottom_bar = default_bottom_bar.format(self.current_mode)
         elif self.key == ord('v'):
             self.current_mode = VIEW_MODE
-            self.bottom_bar = default_bottom_bar.format(self.current_mode)
+            # self.bottom_bar = default_bottom_bar.format(self.current_mode)
         elif self.key == ord('h'):
             if self._is_in_help:
                 self.key = -1
                 self._is_in_help = False
-        elif self.key == ord('r'):
-            self.handle_replace()
-        elif self.key == ord('i'):
-            self.handle_insert()
         elif self.key == ord('g'):
             self.handle_goto()
         elif self.key == ord('s'):
             self.handle_save()
         elif self.key == ord('f'):
             self.handle_search()
-        elif self.key == DELETE_KEY:
-            self.handle_delete()
         elif self.key == HOME_KEY:
             self._increment_offset(-self.current_offset)
         elif self.key == END_KEY:
@@ -172,13 +172,16 @@ class HexEditorUI:
                       + self._bytes_str_len \
                       + self._x_offset + len(self.separator)
             first = self.stdscr.inch(self.cursor_y, x_coord)
-            self.stdscr.addch(self.cursor_y, x_coord, first, curses.color_pair(2))
+            self.stdscr.addch(self.cursor_y, x_coord, first,
+                              curses.color_pair(2))
         else:
             x_coord = self._offset_str_len + self._x_offset * 3 + self._x_offset // 8 + 1
             first = self.stdscr.inch(self.cursor_y, x_coord - 1)
             second = self.stdscr.inch(self.cursor_y, x_coord)
-            self.stdscr.addch(self.cursor_y, x_coord - 1, first, curses.color_pair(2))
-            self.stdscr.addch(self.cursor_y, x_coord, second, curses.color_pair(2))
+            self.stdscr.addch(self.cursor_y, x_coord - 1, first,
+                              curses.color_pair(2))
+            self.stdscr.addch(self.cursor_y, x_coord, second,
+                              curses.color_pair(2))
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -211,10 +214,10 @@ class HexEditorUI:
         self.draw_bottom_bar()
         filename = list(self.filename)
         for symbol in self.get_user_input():
-            if ord(symbol) == 8 and len(filename):
+            if symbol == 8 and len(filename):
                 filename.pop()
-            elif ord(symbol) != 8:
-                filename.append(symbol)
+            elif symbol != 8:
+                filename.append(chr(symbol))
             self.bottom_bar = ''.join(filename)
             self.draw_bottom_bar()
         self.editor.save_changes(''.join(filename))
@@ -243,7 +246,8 @@ class HexEditorUI:
                 self._x_offset = (self._x_offset + 1) % COLUMNS
 
             if self._is_cursor_in_bytes():
-                if (self.cursor_x == COLUMNS + COLUMNS // 2 - 2 + self._offset_str_len
+                if (
+                        self.cursor_x == COLUMNS + COLUMNS // 2 - 2 + self._offset_str_len
                         or self.cursor_x == self._offset_str_len + self._bytes_str_len - 1):
                     # прыгаем через два пробела между блоками по 8 байт или
                     # через разделитель после блока байт
@@ -290,6 +294,18 @@ class HexEditorUI:
         self.key = curses.KEY_LEFT
         self.handle_cursor()
 
+    def handle_insert_mode(self) -> None:
+        if self.key in CONTROL_KEYS:
+            self.handle_cursor()
+        elif self.key == DELETE_KEY:
+            self.handle_delete()
+        elif self.key == BACKSPACE_KEY:
+            self.handle_delete()
+        elif self._is_cursor_in_bytes():
+            self._handle_insert_bytes()
+        else:
+            self._handle_insert_decoded()
+
     def _convert_offset_to_x_pos(self, offset) -> int:
         offset = offset % 16
         if self._is_cursor_in_bytes():
@@ -319,95 +335,56 @@ class HexEditorUI:
         return self.current_offset + (self.cursor_y - 2) * 16 + self._x_offset
 
     def _handle_insert_bytes(self) -> None:
-        while not is_correct_hex_symbol(first_key := self.stdscr.getkey()):
-            pass
-        self.editor.insert(self._get_cursor_offset(), str_to_bytes(first_key))
-        self.stdscr.clear()
-        self.draw()
-
-        second_key = self.stdscr.getch()
-        if second_key == ENTER_KEY:
+        counter = itertools.count()
+        user_input = []
+        stop_keys = CONTROL_KEYS.union((ord('v'),))
+        buffer = []
+        if self.key == ord('v'):
+            self.current_mode = VIEW_MODE
             return
-        elif second_key == ESCAPE_KEY:
-            self.editor.remove(self._get_cursor_offset(), 1)
-            return
+        if is_correct_hex_symbol_or_backspace(self.key):
+            buffer.append(self.key)
+        for symbol in itertools.chain(buffer, self.get_user_input(
+                filter=is_correct_hex_symbol_or_backspace, stop_keys=stop_keys)):
+            if symbol == BACKSPACE_KEY:
+                self.handle_delete()
+                break
+            if next(counter) % 2 - 1:
+                user_input.append('0')
+                user_input.append(chr(symbol))
+                self.editor.insert(self._get_cursor_offset(),
+                                   str_to_bytes(''.join(user_input)))
+                self.stdscr.clear()
+                self.draw()
+            else:
+                del user_input[-2]
+                user_input.append(chr(symbol))
+                self.editor.replace(self._get_cursor_offset(),
+                                    str_to_bytes(''.join(user_input)))
+                self.stdscr.clear()
+                self.draw()
+                user_input = []  #
+        if self.key == ord('v'):
+            self.current_mode = VIEW_MODE
         else:
-            second_key = chr(second_key)
-            while not is_correct_hex_symbol(second_key):
-                second_key = self.stdscr.getkey()
-            self.editor._model.search_region(self._get_cursor_offset()).data = str_to_bytes(first_key + second_key)
-            # replace ????
-            self.stdscr.clear()
-            self.draw()
-
-        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
-            pass
-        if last_key == ENTER_KEY:
-            return
-        elif last_key == ESCAPE_KEY:
-            self.editor.remove(self._get_cursor_offset(), 1)
+            self.handle_cursor()
 
     def _handle_insert_decoded(self) -> None:
-        first_key = self.stdscr.getkey()
-        self.editor.insert(self._get_cursor_offset(), first_key.encode())
-        self.stdscr.clear()
-        self.draw()
-
-        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
-            pass
-        if last_key == ENTER_KEY:
+        stop_keys = CONTROL_KEYS.union((ord('v'),))
+        if self.key == ord('v'):
+            self.current_mode = VIEW_MODE
             return
-        elif last_key == ESCAPE_KEY:
-            self.editor.remove(self._get_cursor_offset(), 1)
-
-    def _handle_replace_bytes(self) -> None:
-        before = self.stdscr.inch(self.cursor_y, self.cursor_x - 1) \
-                 + self.stdscr.inch(self.cursor_y, self.cursor_x)
-
-        while not is_correct_hex_symbol(first_key := self.stdscr.getkey()):
-            pass
-        self.stdscr.addch(self.cursor_y, self.cursor_x, first_key)
-        self.stdscr.addch(self.cursor_y, self.cursor_x - 1, '0')
-        self.stdscr.refresh()
-
-        second_key = self.stdscr.getch()
-        if second_key == ENTER_KEY:
-            self.editor.replace(self._get_cursor_offset(),
-                                str_to_bytes(first_key))
-            return
-        elif second_key == ESCAPE_KEY:
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
-            return
+        for symbol in itertools.chain((self.key,), self.get_user_input(stop_keys=stop_keys)):
+            if symbol == BACKSPACE_KEY:
+                self.handle_delete()
+                break
+            self.editor.insert(self._get_cursor_offset(), chr(symbol).encode('utf-8'))
+            self.stdscr.clear()
+            self.draw()
+        if self.key == ord('v'):
+            self.current_mode = VIEW_MODE
         else:
-            second_key = chr(second_key)
-            while not is_correct_hex_symbol(second_key):
-                second_key = self.stdscr.getkey()
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, first_key)
-            self.stdscr.addstr(self.cursor_y, self.cursor_x, second_key)
-
-        self.stdscr.move(self.cursor_y, self.cursor_x)
-        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
-            pass
-        if last_key == ENTER_KEY:
-            self.editor.replace(self._get_cursor_offset(),
-                                str_to_bytes(first_key + second_key))
-        elif last_key == ESCAPE_KEY:
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
-
-    def _handle_replace_decoded(self) -> None:
-        before = self.stdscr.inch(self.cursor_y, self.cursor_x)
-
-        first_key = self.stdscr.getkey()
-        self.stdscr.addch(self.cursor_y, self.cursor_x, first_key)
-        self.stdscr.refresh()
-
-        self.stdscr.move(self.cursor_y, self.cursor_x)
-        while (last_key := self.stdscr.getch()) not in {ENTER_KEY, ESCAPE_KEY}:
-            pass
-        if last_key == ENTER_KEY:
-            self.editor.replace(self._get_cursor_offset(), first_key.encode())
-        elif last_key == ESCAPE_KEY:
-            self.stdscr.addstr(self.cursor_y, self.cursor_x - 1, chr(before))
+            self.handle_cursor()
 
     def handle_help(self) -> None:
         self._is_in_help = True
@@ -422,43 +399,46 @@ class HexEditorUI:
         user_input = []
         self.bottom_bar = 'goto (h): '
         self.draw_bottom_bar()
-        for symbol in self.get_user_input(filter=is_correct_hex_symbol):
-            if ord(symbol) == 8 and len(user_input):
+        for symbol in self.get_user_input(filter=is_correct_hex_symbol_or_backspace):
+            if symbol == BACKSPACE_KEY and len(user_input):
                 user_input.pop()
-            elif ord(symbol) != 8:
-                user_input.append(symbol)
+            elif symbol != BACKSPACE_KEY:
+                user_input.append(chr(symbol))
             self.bottom_bar = f'goto (h): {"".join(user_input)}'
             self.draw_bottom_bar()
+        logging.log(msg=user_input, level=logging.DEBUG)
         offset = int("".join(user_input), 16)
         self._increment_offset((offset - offset % 16) - self.current_offset)
         self._move_cursor_to_offset(offset)
+        self.cursor_y = 2
 
     def handle_search(self) -> None:
         user_input = []
         self.bottom_bar = 'search (h): '
         self.draw_bottom_bar()
-        counter = count()
-        for symbol in self.get_user_input(filter=is_correct_hex_symbol):
+        counter = itertools.count()
+        for symbol in self.get_user_input(filter=is_correct_hex_symbol_or_backspace):
             if next(counter) % 2 - 1:
-                if ord(symbol) == 8 and len(user_input) >= 2:
+                if symbol == BACKSPACE_KEY and len(user_input) >= 2:
                     user_input[-1] = user_input[-2]
                     user_input[-2] = '0'
                     next(counter)
-                elif ord(symbol) != 8:
+                elif symbol != BACKSPACE_KEY:
                     user_input.append('0')
-                    user_input.append(symbol)
+                    user_input.append(chr(symbol))
             else:
-                if ord(symbol) == 8 and len(user_input) >= 2:
+                if symbol == BACKSPACE_KEY and len(user_input) >= 2:
                     del user_input[-2:]
                     next(counter)
-                elif ord(symbol) != 8:
+                elif symbol != BACKSPACE_KEY:
                     del user_input[-2]
-                    user_input.append(symbol)
+                    user_input.append(chr(symbol))
             self.bottom_bar = f'search (h): {"".join(user_input)}'
             self.draw_bottom_bar()
 
         query = ''.join(user_input)
-        logging.log(msg=f'trying to find {str_to_bytes(query)}', level=logging.DEBUG)
+        logging.log(msg=f'trying to find {str_to_bytes(query)}',
+                    level=logging.DEBUG)
         if (offset := self.editor.search(str_to_bytes(query))) == -1:
             logging.log(msg=f'query {query} not found', level=logging.DEBUG)
             self._bottom_bar_draw_queue.append('not found')
@@ -466,19 +446,26 @@ class HexEditorUI:
         logging.log(msg=f'found at offset {offset}', level=logging.DEBUG)
         self.current_offset = offset - offset % COLUMNS
         self._move_cursor_to_offset(offset)
+        self.cursor_y = 2
 
-    def get_user_input(self, filter=lambda x: True) -> str:
-        """Считывает пользовательский ввод до нажатия enter. Если передан
-           filter, то считывает только символы, удовлетворяющие filter
-           и кнопку backspace"""
-        while (key := self.stdscr.getkey()) != '\n':
-            if filter(key) or ord(key) == 8:
+    def get_user_input(self, filter=lambda x: True,
+                       stop_keys=(ENTER_KEY,)) -> int:
+        """Считывает пользовательский ввод до нажатия stop_symbols(по
+           умолчанию ENTER. Если передан filter, то считывает только символы,
+           удовлетворяющие filter"""
+        while (key := self.stdscr.getch()) not in stop_keys:
+            if filter(key):
                 yield key
+        self.key = key
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Hex editor")
-    # app = HexEditorUI(sys.argv[1])
+    # parser = argparse.ArgumentParser(description="Hex editor")
+    # parser.add_argument('filename', help='name of editing file')
+    # parser.add_argument('-r', '--read-only', action='store_false',
+    #                     help='if passed, open file in read only mode')
+    # args = parser.parse_args(sys.argv[1])
+    # app = HexEditorUI(filename=args.filename, is_readonly=args.read_only)
     app = HexEditorUI('alabai.png')
     curses.wrapper(app.main)
 
