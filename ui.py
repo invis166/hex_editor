@@ -66,8 +66,8 @@ class HexEditorUI:
     def __init__(self, filename: str, is_readonly=False):
         self.editor = HexEditor(filename, is_readonly)
 
-        self.selected = []
-        self.clipboard = []
+        self.selected = [None, None]
+        self.clipboard = b''
         self.data = b''
         self.filename = filename
 
@@ -146,39 +146,41 @@ class HexEditorUI:
 
     def handle_key(self) -> None:
         if self.key in CONTROL_KEYS:
-            self.selected = []
+            self.clear_selected()
             self.handle_cursor()
+        elif self.key == ord('c') and self.selected[0] is not None:
+            self.handle_copy()
         elif self.key in SELECTION_KEYS:
             self.handle_select()
-        elif self.current_mode == INSERT_MODE:
-            self.handle_insert_mode()
         elif self.key == curses.KEY_NPAGE:
-            self.selected = []
+            self.clear_selected()
             self._increment_offset(self.bytes_rows * 16)
         elif self.key == curses.KEY_PPAGE:
-            self.selected = []
+            self.clear_selected()
             self._increment_offset(-self.bytes_rows * 16)
-        elif self.key == ord('a') and not self.is_readonly:
-            self.current_mode = INSERT_MODE
         elif self.key == ord('v'):
             self.current_mode = VIEW_MODE
+        elif self.current_mode == INSERT_MODE:
+            self.handle_insert_mode()
+        elif self.key == ord('a') and not self.is_readonly:
+            self.current_mode = INSERT_MODE
         elif self.key == ord('h'):
             if self._is_in_help:
                 self.key = -1
                 self._is_in_help = False
         elif self.key == ord('g'):
-            self.selected = []
+            self.clear_selected()
             self.handle_goto()
         elif self.key == ord('s'):
             self.handle_save()
         elif self.key == ord('f'):
-            self.selected = []
+            self.clear_selected()
             self.handle_search()
         elif self.key == HOME_KEY:
-            self.selected = []
+            self.clear_selected()
             self._increment_offset(-self.current_offset)
         elif self.key == END_KEY:
-            self.selected = []
+            self.clear_selected()
             new_offset = (self.editor.file_size
                           - (self.bytes_rows * COLUMNS
                              - (16 - self.editor.file_size % 16)))
@@ -204,7 +206,11 @@ class HexEditorUI:
                               curses.color_pair(2))
 
     def draw_selected_bytes(self) -> None:
-        for offset in self.selected:
+        if self.selected[0] is None:
+            return
+        start = min(self.selected)
+        end = max(self.selected)
+        for offset in range(start, end + 1):
             if not self._is_offset_on_screen(offset):
                 continue
             y, x = self._get_coords_by_offset(offset)
@@ -239,42 +245,50 @@ class HexEditorUI:
                            " " * (self.width - len(self.bottom_bar) - 1))
         self.stdscr.attroff(curses.color_pair(3))
 
+    def handle_copy(self) -> None:
+        start, end = min(self.selected), max(self.selected)
+        self.clipboard = self.editor.get_nbytes(start, end - start + 1)
+        self.clear_selected()
+        logging.log(msg=f'clipboard: {self.clipboard}', level=logging.DEBUG)
+
+    def handle_paste(self) -> None:
+        if self.clipboard == b'':
+            return
+        self.editor.insert(self._get_cursor_offset(), self.clipboard)
+
+    def handle_cut(self) -> None:
+        if self.selected[0] is None:
+            return
+        start, end = min(self.selected), max(self.selected)
+        self.clipboard = self.editor.get_nbytes(start, end - start + 1)
+        self.clear_selected()
+        self.editor.remove(start, end - start + 1)
+
     def handle_select(self) -> None:
+        if self.selected[0] is None:
+            self.selected = [self._get_cursor_offset(),
+                             self._get_cursor_offset()]
         if self.key == SHIFT_RIGHT:
-            if not self.selected:
-                self.selected.append(self._get_cursor_offset())
-            elif self.selected and self.selected[-1] < self._get_cursor_offset():
-                self.selected.pop()
+            if self.selected[-1] < self.selected[0]:
+                self.selected[-1] += 1
             else:
-                self.selected.append(self.selected[-1] + 1)
+                self.selected[-1] += 1
         elif self.key == SHIFT_LEFT:
-            if not self.selected:
-                self.selected.append(self._get_cursor_offset())
-            elif self.selected and self.selected[-1] > self._get_cursor_offset():
-                self.selected.pop()
+            if self.selected[-1] > self.selected[0]:
+                self.selected[-1] -= 1
             elif self.selected[-1] != 0:
-                self.selected.append(self.selected[-1] - 1)
+                self.selected[-1] -= 1
         elif self.key == SHIFT_DOWN:
-            cursor_offset = self._get_cursor_offset()
-            last_char_offset = self.selected[-1] if self.selected else cursor_offset
-            last_char_offset += 16
-            self.selected = list(filter(self._is_correct_offset,
-                                        range(min(last_char_offset, cursor_offset),
-                                              max(last_char_offset, cursor_offset) + 1)))
-            if cursor_offset > last_char_offset:
-                self.selected = self.selected[::-1]
+            self.selected[-1] += 16
+            self.selected[-1] %= self.editor.file_size
         else:
-            cursor_offset = self._get_cursor_offset()
-            last_char_offset = self.selected[-1] if self.selected else cursor_offset
-            last_char_offset -= 16
-            self.selected = list(filter(self._is_correct_offset,
-                                        range(min(last_char_offset, cursor_offset),
-                                              max(last_char_offset, cursor_offset) + 1)))
-            if cursor_offset > last_char_offset:
-                self.selected = self.selected[::-1]
-            if self.selected[-1] < self.current_offset:
-                self._increment_offset(-16)
-                self._move_cursor_to_offset(cursor_offset)
+            self.selected[-1] -= 16
+            self.selected[-1] = max(0, self.selected[-1])
+
+        if self.selected[-1] < self.current_offset:
+            self._increment_offset(-16)
+        elif self.selected[-1] > self.current_offset + self.bytes_rows * 16:
+            self._increment_offset(16)
 
     def handle_save(self) -> None:
         self.bottom_bar = self.filename
@@ -370,24 +384,28 @@ class HexEditorUI:
         if self.key in CONTROL_KEYS:
             self.handle_cursor()
         elif self.key == DELETE_KEY:
-            self.selected = []
+            self.clear_selected()
             self.handle_delete()
         elif self.key == BACKSPACE_KEY:
-            self.selected = []
+            self.clear_selected()
             self.handle_delete()
+        elif self.key == ord('k'):
+            self.handle_cut()
+        elif self.key == ord('p'):
+            self.handle_paste()
         elif self._is_cursor_in_bytes():
-            self.selected = []
+            self.clear_selected()
             self._handle_insert_bytes()
         else:
-            self.selected = []
+            self.clear_selected()
             self._handle_insert_decoded()
 
-    def _is_offset_on_screen(self, offset: int):
+    def _is_offset_on_screen(self, offset: int) -> bool:
         return (self.current_offset
-                <= offset <=
+                <= offset <
                 self.current_offset + self.bytes_rows * 16)
 
-    def _is_correct_offset(self, offset: int):
+    def _is_correct_offset(self, offset: int) -> bool:
         return 0 <= offset <= self.editor.file_size
 
     def _convert_offset_to_x_pos(self, offset) -> int:
@@ -427,7 +445,8 @@ class HexEditorUI:
     def _handle_insert_bytes(self) -> None:
         counter = itertools.count()
         user_input = []
-        stop_keys = CONTROL_KEYS.union((ord('v'),))
+        stop_keys = CONTROL_KEYS.union(SELECTION_KEYS)
+        stop_keys.add(ord('v'))
         buffer = []
         if self.key == ord('v'):
             self.current_mode = VIEW_MODE
@@ -456,6 +475,8 @@ class HexEditorUI:
                 user_input = []  #
         if self.key == ord('v'):
             self.current_mode = VIEW_MODE
+        elif self.key in SELECTION_KEYS:
+            self.handle_select()
         else:
             self.handle_cursor()
 
@@ -539,6 +560,17 @@ class HexEditorUI:
         logging.log(msg=f'found at offset {offset}', level=logging.DEBUG)
         self.current_offset = offset - offset % COLUMNS
         self._move_cursor_to_offset(offset)
+
+    def clear_selected(self) -> None:
+        if self.selected[0] is None:
+            return
+        if not self._is_offset_on_screen(self.selected[0]):
+            self._increment_offset(self.selected[0]
+                                   - self.selected[0] % 16
+                                   - self.current_offset
+                                   - self.bytes_rows // 2 * 16)
+        self._move_cursor_to_offset(self.selected[0])
+        self.selected = [None, None]
 
     def get_user_input(self, filter=lambda x: True,
                        stop_keys=(ENTER_KEY,)) -> int:
