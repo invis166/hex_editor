@@ -142,10 +142,8 @@ class HexEditorUI:
             self._increment_offset(-self.bytes_rows * 16)
         elif self.key == ord('a'):
             self.current_mode = INSERT_MODE
-            # self.bottom_bar = default_bottom_bar.format(self.current_mode)
         elif self.key == ord('v'):
             self.current_mode = VIEW_MODE
-            # self.bottom_bar = default_bottom_bar.format(self.current_mode)
         elif self.key == ord('h'):
             if self._is_in_help:
                 self.key = -1
@@ -213,13 +211,26 @@ class HexEditorUI:
         self.bottom_bar = self.filename
         self.draw_bottom_bar()
         filename = list(self.filename)
+        cursor_x = len(filename)
+        self.stdscr.move(self.height - 1, cursor_x)
+        self.stdscr.refresh()
         for symbol in self.get_user_input():
-            if symbol == 8 and len(filename):
-                filename.pop()
+            if symbol == 8 and cursor_x:
+                filename.pop(cursor_x - 1)
+                cursor_x -= 1
+            elif symbol == ESCAPE_KEY:
+                return
+            elif symbol == curses.KEY_LEFT:
+                cursor_x = max(0, cursor_x - 1)
+            elif symbol == curses.KEY_RIGHT:
+                cursor_x = min(len(filename), cursor_x + 1)
             elif symbol != 8:
-                filename.append(chr(symbol))
+                filename.insert(cursor_x, chr(symbol))
+                cursor_x += 1
             self.bottom_bar = ''.join(filename)
             self.draw_bottom_bar()
+            self.stdscr.move(self.height - 1, cursor_x)
+            self.stdscr.refresh()
         self.editor.save_changes(''.join(filename))
         self._bottom_bar_draw_queue.append('saved')
 
@@ -389,11 +400,11 @@ class HexEditorUI:
     def handle_help(self) -> None:
         self._is_in_help = True
         lines = help_menu.split('\n')
-        self.stdscr.attron(curses.color_pair(3))
+        self.stdscr.attron(curses.color_pair(1))
         for i, line in enumerate(lines):
             self.stdscr.addstr(2 + i, 0,
                                line + ' ' * (self._total_line_len - len(line)))
-        self.stdscr.attroff(curses.color_pair(3))
+        self.stdscr.attroff(curses.color_pair(1))
 
     def handle_goto(self) -> None:
         user_input = []
@@ -416,25 +427,29 @@ class HexEditorUI:
         user_input = []
         self.bottom_bar = 'search (h): '
         self.draw_bottom_bar()
+        stop_keys = {ENTER_KEY, ESCAPE_KEY}
         counter = itertools.count()
-        for symbol in self.get_user_input(filter=is_correct_hex_symbol_or_backspace):
+        for symbol in self.get_user_input(
+                filter=is_correct_hex_symbol_or_backspace, stop_keys=stop_keys):
+            if symbol == BACKSPACE_KEY and not user_input:
+                continue
             if next(counter) % 2 - 1:
                 if symbol == BACKSPACE_KEY and len(user_input) >= 2:
                     user_input[-1] = user_input[-2]
                     user_input[-2] = '0'
-                    next(counter)
                 elif symbol != BACKSPACE_KEY:
                     user_input.append('0')
                     user_input.append(chr(symbol))
             else:
                 if symbol == BACKSPACE_KEY and len(user_input) >= 2:
                     del user_input[-2:]
-                    next(counter)
                 elif symbol != BACKSPACE_KEY:
                     del user_input[-2]
                     user_input.append(chr(symbol))
             self.bottom_bar = f'search (h): {"".join(user_input)}'
             self.draw_bottom_bar()
+        if self.key == ESCAPE_KEY:
+            return
 
         query = ''.join(user_input)
         logging.log(msg=f'trying to find {str_to_bytes(query)}',
