@@ -14,6 +14,11 @@ VIEW_MODE = 'view'
 OFFSET_COLUMN_LENGTH = 8
 COLUMNS = 16
 
+SHIFT_LEFT = 391
+SHIFT_RIGHT = 400
+SHIFT_DOWN = 548
+SHIFT_UP = 547
+
 BACKSPACE_KEY = 8
 ENTER_KEY = 10
 ESCAPE_KEY = 27
@@ -23,6 +28,9 @@ END_KEY = 358
 
 CONTROL_KEYS = {
     curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT,
+}
+SELECTION_KEYS = {
+    SHIFT_UP, SHIFT_DOWN, SHIFT_RIGHT, SHIFT_LEFT
 }
 
 default_bottom_bar = 'current mode: {} | h for help'
@@ -50,12 +58,15 @@ def init_colors() -> None:
     curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)
     curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE)
+    curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
 
 class HexEditorUI:
     def __init__(self, filename: str, is_readonly=False):
         self.editor = HexEditor(filename, is_readonly)
 
+        self.selected = []
+        self.clipboard = []
         self.data = b''
         self.filename = filename
 
@@ -65,14 +76,14 @@ class HexEditorUI:
         self.width = 0
         self.bytes_rows = 0
 
+        self.is_readonly = is_readonly
         self._is_in_help = False
+        self._bottom_bar_draw_queue = []
 
         self.current_mode = 'view'
         self.separator = ' | '
         self.upper_bar = default_upper_bar
         self.bottom_bar = default_bottom_bar.format(self.current_mode)
-
-        self._bottom_bar_draw_queue = []
 
         self._offset_str_len = OFFSET_COLUMN_LENGTH + len(self.separator)
         self._bytes_str_len = COLUMNS * 2 + COLUMNS
@@ -134,13 +145,15 @@ class HexEditorUI:
     def handle_key(self) -> None:
         if self.key in CONTROL_KEYS:
             self.handle_cursor()
+        elif self.key in SELECTION_KEYS:
+            self.handle_select()
         elif self.current_mode == INSERT_MODE:
             self.handle_insert_mode()
         elif self.key == curses.KEY_NPAGE:
             self._increment_offset(self.bytes_rows * 16)
         elif self.key == curses.KEY_PPAGE:
             self._increment_offset(-self.bytes_rows * 16)
-        elif self.key == ord('a'):
+        elif self.key == ord('a') and not self.is_readonly:
             self.current_mode = INSERT_MODE
         elif self.key == ord('v'):
             self.current_mode = VIEW_MODE
@@ -181,6 +194,11 @@ class HexEditorUI:
             self.stdscr.addch(self.cursor_y, x_coord, second,
                               curses.color_pair(2))
 
+    def draw_selected_bytes(self) -> None:
+        for offset in self.selected:
+            if self.current_offset + self.bytes_rows * 16 <= offset <= self.current_offset:
+                continue
+
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
                                            OFFSET_COLUMN_LENGTH,
@@ -206,6 +224,25 @@ class HexEditorUI:
         self.stdscr.addstr(self.height - 1, len(self.bottom_bar),
                            " " * (self.width - len(self.bottom_bar) - 1))
         self.stdscr.attroff(curses.color_pair(3))
+
+    def handle_select(self) -> None:
+        if self.key == SHIFT_RIGHT:
+            if self.selected and self.selected[-1] == self._get_cursor_offset():
+                self.selected.pop()
+            else:
+                self.selected.append(self._get_cursor_offset())
+            self._move_cursor_to_offset(self._get_cursor_offset() + 1)
+        elif self.key == SHIFT_LEFT:
+            if self._get_cursor_offset() == 0:
+                if not self.selected:
+                    self.selected.append(self._get_cursor_offset())
+            elif self.selected and self.selected[-1] == self._get_cursor_offset() - 1:
+                self.selected.pop()
+                self._move_cursor_to_offset(self._get_cursor_offset() - 1)
+            else:
+                self.selected.append(self._get_cursor_offset() - 1)
+                self._move_cursor_to_offset(self._get_cursor_offset() - 1)
+        logging.log(msg=self.selected, level=logging.DEBUG)
 
     def handle_save(self) -> None:
         self.bottom_bar = self.filename
@@ -326,9 +363,15 @@ class HexEditorUI:
                    + self._bytes_str_len \
                    + offset + len(self.separator)
 
-    def _move_cursor_to_offset(self, offset):
-        self.cursor_x = self._convert_offset_to_x_pos(offset)
+    def _move_cursor_to_offset(self, offset: int) -> None:
+        self.cursor_y, self.cursor_x = self._get_cursor_coords_by_offset(offset)
         self._x_offset = offset % 16
+
+    def _get_cursor_coords_by_offset(self, offset: int) -> tuple:
+        y = 2 + (offset - self.current_offset) // 16
+        x = self._convert_offset_to_x_pos(offset)
+
+        return y, x
 
     def _is_cursor_in_bytes(self) -> bool:
         return (self._offset_str_len
@@ -465,9 +508,9 @@ class HexEditorUI:
 
     def get_user_input(self, filter=lambda x: True,
                        stop_keys=(ENTER_KEY,)) -> int:
-        """Считывает пользовательский ввод до нажатия stop_symbols(по
-           умолчанию ENTER. Если передан filter, то считывает только символы,
-           удовлетворяющие filter"""
+        """Считывает пользовательский ввод до нажатия stop_keys(по
+           умолчанию ENTER). Если передан предикат filter, то считывает
+           только символы, удовлетворяющие ему"""
         while (key := self.stdscr.getch()) not in stop_keys:
             if filter(key):
                 yield key
