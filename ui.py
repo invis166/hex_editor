@@ -216,8 +216,13 @@ class HexEditorUI:
             y, x = self._get_coords_by_offset(offset)
             first = self.stdscr.inch(y, x)
             second = self.stdscr.inch(y, x - 1)
+            decoded_char_x = (self._total_line_len
+                              - self._decoded_bytes_str_len + 3
+                              + offset % 16)
+            third = self.stdscr.inch(y, decoded_char_x)
             self.stdscr.addch(y, x, first, curses.color_pair(1))
             self.stdscr.addch(y, x - 1, second, curses.color_pair(1))
+            self.stdscr.addch(y, decoded_char_x, third, curses.color_pair(1))
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -268,20 +273,20 @@ class HexEditorUI:
         if self.selected[0] is None:
             self.selected = [self._get_cursor_offset(),
                              self._get_cursor_offset()]
-        if self.key == SHIFT_RIGHT:
+        elif self.key == SHIFT_RIGHT:
             if self.selected[-1] < self.selected[0]:
                 self.selected[-1] += 1
-            else:
+            elif self.selected[-1] != self.editor.file_size - 1:
                 self.selected[-1] += 1
         elif self.key == SHIFT_LEFT:
             if self.selected[-1] > self.selected[0]:
                 self.selected[-1] -= 1
             elif self.selected[-1] != 0:
                 self.selected[-1] -= 1
-        elif self.key == SHIFT_DOWN:
+        if self.key == SHIFT_DOWN:
             self.selected[-1] += 16
-            self.selected[-1] %= self.editor.file_size
-        else:
+            self.selected[-1] = min(self.selected[-1], self.editor.file_size - 1)
+        elif self.key == SHIFT_UP:
             self.selected[-1] -= 16
             self.selected[-1] = max(0, self.selected[-1])
 
