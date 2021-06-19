@@ -6,7 +6,7 @@ import itertools
 
 from modules.editor import HexEditor
 
-logging.basicConfig(filename='log.log', level=logging.DEBUG)
+logging.basicConfig(filename='log.log', level=logging.ERROR)
 
 INSERT_MODE = 'insert'
 VIEW_MODE = 'view'
@@ -610,13 +610,13 @@ class HexEditorUI:
 
 
 def main():
-    # parser = argparse.ArgumentParser(description="Hex editor")
-    # parser.add_argument('filename', help='name of the file to edit')
-    # parser.add_argument('-r', '--read-only', action='store_false',
-    #                     help='opens file in readonly mode if passed')
-    # args = parser.parse_args(sys.argv[1])
-    # app = HexEditorUI(filename=args.filename, is_readonly=args.read_only)
-    app = HexEditorUI('alabai.png')
+    parser = argparse.ArgumentParser(description="Hex editor")
+    parser.add_argument('filename', nargs='?', help='name of the file to edit')
+    parser.add_argument('-r', '--read-only', action='store_true',
+                        help='opens file in readonly mode if passed')
+    args = parser.parse_args(sys.argv[1:])
+    logging.log(msg=f'readonly {args.read_only}', level=logging.DEBUG)
+    app = HexEditorUI(filename=args.filename, is_readonly=args.read_only)
     curses.wrapper(app.main)
 
 
