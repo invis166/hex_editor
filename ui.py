@@ -40,7 +40,8 @@ help_menu = "'a' for insert mode\n'v' for view mode\n's' for save" \
             "\n'page_up', 'page_down', 'home', 'end', arrows for navigation" \
             "\n'g' for goto\n'f' for find" \
             "\n'h' for open(close) help\n'q' for quit" \
-            "\nshift + arrows for selection"
+            "\nshift + arrows for selection\n'c' for copy\n'k' for cut" \
+            "(in insert mode)\n'p' for paste(in insert mode)"
 
 
 def str_to_bytes(value: str) -> bytes:
@@ -509,6 +510,8 @@ class HexEditorUI:
         for i, line in enumerate(lines):
             self.stdscr.addstr(2 + i, 0,
                                line + ' ' * (self._total_line_len - len(line)))
+        for i in range(len(lines) + 2, self.height - 1):
+            self.stdscr.addstr(i, 0, ' ' * self._total_line_len)
         self.stdscr.attroff(curses.color_pair(1))
 
     def handle_goto(self) -> None:
@@ -590,9 +593,9 @@ class HexEditorUI:
 
 def main():
     # parser = argparse.ArgumentParser(description="Hex editor")
-    # parser.add_argument('filename', help='name of editing file')
+    # parser.add_argument('filename', help='name of the file to edit')
     # parser.add_argument('-r', '--read-only', action='store_false',
-    #                     help='if passed, open file in read only mode')
+    #                     help='opens file in readonly mode if passed')
     # args = parser.parse_args(sys.argv[1])
     # app = HexEditorUI(filename=args.filename, is_readonly=args.read_only)
     app = HexEditorUI('alabai.png')
