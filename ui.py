@@ -98,7 +98,7 @@ class HexEditorUI:
         self.cursor_x = self._offset_str_len + 1
         self.cursor_y = 2
 
-        self._x_offset = 0
+        self._x_offset = 0  # сдвиг в текущей строке
 
         self.stdscr: curses.window = None
 
@@ -190,20 +190,17 @@ class HexEditorUI:
             logging.log(level=logging.DEBUG, msg=f'unknown key {self.key}')
 
     def draw_label(self) -> None:
+        label_x = self._offset_to_label_x(self._x_offset)
         if self._is_cursor_in_bytes():
-            x_coord = self._offset_str_len \
-                      + self._bytes_str_len \
-                      + self._x_offset + len(self.separator)
-            first = self.stdscr.inch(self.cursor_y, x_coord)
-            self.stdscr.addch(self.cursor_y, x_coord, first,
+            first = self.stdscr.inch(self.cursor_y, label_x)
+            self.stdscr.addch(self.cursor_y, label_x, first,
                               curses.color_pair(2))
         else:
-            x_coord = self._offset_str_len + self._x_offset * 3 + self._x_offset // 8 + 1
-            first = self.stdscr.inch(self.cursor_y, x_coord - 1)
-            second = self.stdscr.inch(self.cursor_y, x_coord)
-            self.stdscr.addch(self.cursor_y, x_coord - 1, first,
+            first = self.stdscr.inch(self.cursor_y, label_x - 1)
+            second = self.stdscr.inch(self.cursor_y, label_x)
+            self.stdscr.addch(self.cursor_y, label_x - 1, first,
                               curses.color_pair(2))
-            self.stdscr.addch(self.cursor_y, x_coord, second,
+            self.stdscr.addch(self.cursor_y, label_x, second,
                               curses.color_pair(2))
 
     def draw_selected_bytes(self) -> None:
@@ -214,16 +211,26 @@ class HexEditorUI:
         for offset in range(start, end + 1):
             if not self._is_offset_on_screen(offset):
                 continue
-            y, x = self._get_coords_by_offset(offset)
-            first = self.stdscr.inch(y, x)
-            second = self.stdscr.inch(y, x - 1)
-            decoded_char_x = (self._total_line_len
-                              - self._decoded_bytes_str_len + 3
-                              + offset % 16)
-            third = self.stdscr.inch(y, decoded_char_x)
-            self.stdscr.addch(y, x, first, curses.color_pair(1))
-            self.stdscr.addch(y, x - 1, second, curses.color_pair(1))
-            self.stdscr.addch(y, decoded_char_x, third, curses.color_pair(1))
+            y, cursor_x = self._cursor_coords_by_offset(offset)
+            label_x = self._offset_to_label_x(offset)
+            if self._is_cursor_in_bytes():
+                first = self.stdscr.inch(y, cursor_x)
+                second = self.stdscr.inch(y, cursor_x - 1)
+                third = self.stdscr.inch(y, label_x)
+                self.stdscr.addch(y, cursor_x, first, curses.color_pair(1))
+                self.stdscr.addch(y, cursor_x - 1, second,
+                                  curses.color_pair(1))
+                self.stdscr.addch(y, label_x, third,
+                                  curses.color_pair(1))
+            else:
+                first = self.stdscr.inch(y, label_x)
+                second = self.stdscr.inch(y, label_x - 1)
+                third = self.stdscr.inch(y, cursor_x)
+                self.stdscr.addch(y, label_x, first, curses.color_pair(1))
+                self.stdscr.addch(y, label_x - 1, second,
+                                  curses.color_pair(1))
+                self.stdscr.addch(y, cursor_x, third,
+                                  curses.color_pair(1))
 
     def draw_offset(self, y: int) -> None:
         offset_str = '{0:0{1}x}{2}'.format(self.current_offset + y * COLUMNS,
@@ -290,6 +297,8 @@ class HexEditorUI:
         elif self.key == SHIFT_UP:
             self.selected[-1] -= 16
             self.selected[-1] = max(0, self.selected[-1])
+
+        logging.log(msg=f'selected {self.selected}', level=logging.DEBUG)
 
         if self.selected[-1] < self.current_offset:
             self._increment_offset(-16)
@@ -414,22 +423,22 @@ class HexEditorUI:
     def _is_correct_offset(self, offset: int) -> bool:
         return 0 <= offset <= self.editor.file_size
 
-    def _convert_offset_to_x_pos(self, offset) -> int:
+    def _offset_to_cursor_x(self, offset) -> int:
         offset = offset % 16
         if self._is_cursor_in_bytes():
             return self._offset_str_len + offset * 3 + offset // 8 + 1
-        else:
-            return self._offset_str_len \
-                   + self._bytes_str_len \
-                   + offset + len(self.separator)
+
+        return (self._offset_str_len
+                + self._bytes_str_len
+                + offset + len(self.separator))
 
     def _move_cursor_to_offset(self, offset: int) -> None:
-        self.cursor_y, self.cursor_x = self._get_coords_by_offset(offset)
+        self.cursor_y, self.cursor_x = self._cursor_coords_by_offset(offset)
         self._x_offset = offset % 16
 
-    def _get_coords_by_offset(self, offset: int) -> tuple:
+    def _cursor_coords_by_offset(self, offset: int) -> tuple:
         y = 2 + (offset - self.current_offset) // 16
-        x = self._convert_offset_to_x_pos(offset)
+        x = self._offset_to_cursor_x(offset)
 
         return y, x
 
@@ -443,6 +452,15 @@ class HexEditorUI:
             return
 
         self.current_offset = max(0, self.current_offset + value)
+
+    def _offset_to_label_x(self, offset: int) -> int:
+        offset = offset % 16
+        if self._is_cursor_in_bytes():
+            return (self._offset_str_len
+                    + self._bytes_str_len
+                    + offset + len(self.separator))
+
+        return self._offset_str_len + offset * 3 + offset // 8 + 1
 
     def _get_cursor_offset(self) -> int:
         """Offset по положению курсора"""
