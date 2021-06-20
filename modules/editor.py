@@ -13,6 +13,8 @@ class HexEditor:
         self._model = FileModel(os.path.getsize(filename))
         self._buffer = DataBuffer(self._model, self._fp)
 
+        self.__chunk_size = 1024
+
     def get_nbytes(self, offset: int, count: int) -> bytes:
         return bytes(self._buffer.read_nbytes(offset, count))
 
@@ -37,8 +39,13 @@ class HexEditor:
                 fp.write(region.data)
             elif (region.original_start != region.start
                   or region.original_end != region.end):
-                fp.seek(region.start)
-                fp.write(self.get_nbytes(region.start, region.length))
+                previous = region.start
+                for i in range(region.length // self.__chunk_size):
+                    data = self.get_nbytes(previous, self.__chunk_size)
+                    fp.seek(previous)
+                    fp.write(data)
+                    previous += self.__chunk_size
+                fp.write(self.get_nbytes(previous, region.length % self.__chunk_size))
         fp.flush()
 
         if filename != self.filename:
