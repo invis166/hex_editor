@@ -47,6 +47,7 @@ class HexEditor:
                     previous += self.__chunk_size
                 fp.write(self.get_nbytes(previous, region.length % self.__chunk_size))
         fp.flush()
+        fp.truncate(self.file_size)
 
         if filename != self.filename:
             fp.close()
